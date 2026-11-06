@@ -1,0 +1,482 @@
+==============================================================================
+EXPENSE TRACKER - PROFESSIONAL BUILD PLAN
+React (frontend) + Node.js/Express (backend) + PostgreSQL (database)
+==============================================================================
+
+HOW TO USE THIS FILE
+--------------------
+1. Unzip expense-tracker.zip. All files exist but are EMPTY.
+2. Work phase by phase, in order. Do not skip ahead.
+3. Each phase has: Goal, Files to fill, Tasks, and a "Done when" checklist.
+4. Finish and test a phase before starting the next one.
+5. When asking for code, tell me "Phase X, Step Y" and I will give you the
+   code for exactly those files.
+
+TECH STACK
+----------
+Frontend : React 18 + Vite, React Router, TanStack Query (server data),
+           Redux Toolkit (auth/UI state), Tailwind CSS, React Hook Form + Zod,
+           Recharts (charts), Axios, i18next (English + Arabic/RTL ready)
+Backend  : Node.js 20, Express, pg (node-postgres), JWT (access + refresh),
+           bcrypt, Zod/Joi validation, Helmet, CORS, express-rate-limit,
+           Winston (logging), Multer (uploads), node-cron (jobs),
+           Nodemailer (emails), pdfkit + exceljs (exports), Swagger docs
+Database : PostgreSQL 15+ with plain SQL migrations
+DevOps   : Docker + docker-compose, GitHub Actions CI, ESLint + Prettier
+Testing  : Jest + Supertest (backend), Vitest + Testing Library (frontend)
+
+
+==============================================================================
+FEATURE LIST (WHAT THE FINISHED APP DOES)
+==============================================================================
+AUTH & ACCOUNT
+ - Register, login, logout, refresh tokens, forgot/reset password
+ - Profile (name, avatar, currency, language, theme), change password
+ - Delete account
+
+CORE FINANCE
+ - Expenses: add/edit/delete, category, account, date, notes, receipt upload,
+   tags, payment method
+ - Income: add/edit/delete, source, account
+ - Categories: default + custom (name, color, icon), income/expense types
+ - Accounts/Wallets: cash, bank, card, savings with balances
+ - Transfers between accounts
+ - Budgets: monthly budget per category + overall, progress bar, alerts
+ - Recurring transactions: daily/weekly/monthly/yearly, auto-created by a job
+
+INSIGHTS
+ - Dashboard: balance, income vs expense, savings, charts, recent items
+ - Reports: monthly, yearly, by category, by account, custom date range
+ - Export: CSV, Excel, PDF
+ - Notifications: budget exceeded, recurring created, weekly summary
+
+EXPERIENCE
+ - Fully responsive: mobile, tablet, desktop (sidebar + bottom nav on mobile)
+ - Dark / light theme
+ - Search, filters, sorting, pagination
+ - Multi-currency display, English + Arabic (RTL)
+ - Loading skeletons, empty states, error pages, toasts
+
+
+==============================================================================
+PROJECT STRUCTURE (OVERVIEW)
+==============================================================================
+expense-tracker/
+  backend/
+    src/
+      config/          env, db pool, logger, cors, swagger
+      routes/          URL -> controller mapping
+      controllers/     read request, call service, send response
+      services/        business logic
+      repositories/    SQL queries only (database access)
+      middlewares/     auth, validation, errors, rate limit, upload
+      validators/      request schemas
+      utils/           helpers (ApiError, jwt, hash, pagination ...)
+      jobs/            scheduled tasks (recurring, alerts, weekly summary)
+      templates/       email HTML templates
+    database/          migrations, seeds, runner scripts
+    tests/             unit + integration
+    docs/openapi.yaml  API documentation
+  frontend/
+    src/
+      app/             store, query client, providers
+      routes/          router, protected/public routes
+      layouts/         main layout, auth layout, sidebar, topbar, bottom nav
+      pages/           one folder per screen
+      features/        feature logic: hooks, forms, tables, charts
+      components/      reusable UI (ui/) and shared (common/)
+      api/             axios client + one file per resource
+      hooks/ utils/ styles/ i18n/ assets/ tests/
+  docs/                architecture, schema, API, deployment, contributing
+  .github/workflows/   CI and deploy
+  docker-compose.yml   app + postgres
+
+Architecture rule (backend):  Route -> Controller -> Service -> Repository -> DB
+Architecture rule (frontend): Page -> Feature components/hooks -> API file
+
+
+==============================================================================
+PHASE 0 - ENVIRONMENT & SETUP
+==============================================================================
+Goal: Everything installed, both apps start, database connects.
+
+Files to fill:
+ - .gitignore, README.md, docker-compose.yml
+ - backend/package.json, backend/.env.example, backend/.gitignore,
+   backend/.eslintrc.json, backend/.prettierrc
+ - frontend/package.json, frontend/vite.config.js, frontend/index.html,
+   frontend/.env.example, frontend/.gitignore, frontend/.eslintrc.cjs,
+   frontend/.prettierrc
+
+Tasks:
+ 0.1 Install Node.js 20+, PostgreSQL 15+ (or use Docker), Git, VS Code.
+ 0.2 Create the Git repository, first commit with the empty structure.
+ 0.3 Fill backend/package.json and install backend dependencies.
+ 0.4 Fill frontend/package.json and install frontend dependencies.
+ 0.5 Create the database "expense_tracker" in PostgreSQL.
+ 0.6 Create backend/.env from .env.example (DB url, JWT secrets, ports).
+ 0.7 Fill docker-compose.yml (postgres service + optional pgAdmin).
+
+Done when:
+ [ ] "npm run dev" works in backend and frontend (even with blank output)
+ [ ] You can connect to the database from your machine
+ [ ] ESLint and Prettier run without errors
+
+
+==============================================================================
+PHASE 1 - DATABASE DESIGN
+==============================================================================
+Goal: Full database schema created by migrations, with default data.
+
+Files to fill:
+ - backend/database/migrations/001 ... 010 (.sql)
+ - backend/database/seeds/001_default_categories.sql
+ - backend/database/seeds/002_demo_data.sql
+ - backend/database/migrate.js, backend/database/seed.js
+ - docs/DATABASE_SCHEMA.md
+
+Tables:
+ users                 id (uuid), name, email (unique), password_hash, avatar_url,
+                       currency, language, theme, role, email_verified,
+                       created_at, updated_at
+ refresh_tokens        id, user_id, token_hash, expires_at, revoked, created_at
+ accounts              id, user_id, name, type, balance, currency, color,
+                       is_archived, created_at
+ categories            id, user_id (null = default), name, type (income/expense),
+                       icon, color, is_default
+ expenses              id, user_id, account_id, category_id, amount, date, note,
+                       payment_method, tags[], receipt_url, recurring_id,
+                       created_at, updated_at
+ incomes               id, user_id, account_id, category_id, amount, date, source,
+                       note, recurring_id, created_at, updated_at
+ budgets               id, user_id, category_id (null = overall), amount, month,
+                       year, alert_threshold, created_at
+ recurring_transactions id, user_id, type, amount, account_id, category_id,
+                       frequency, start_date, end_date, next_run_date, is_active
+ notifications         id, user_id, type, title, message, is_read, created_at
+
+Tasks:
+ 1.1 Draw the ER diagram (relations: user has many accounts, categories ...).
+ 1.2 Write each migration (CREATE TABLE, constraints, foreign keys).
+ 1.3 Write 010 indexes (user_id, date, category_id on expenses/incomes).
+ 1.4 Build migrate.js to run migrations in order and track them.
+ 1.5 Seed default categories (Food, Transport, Rent, Bills, Shopping, Health,
+     Entertainment, Education, Salary, Freelance, Gifts ...).
+ 1.6 Document the schema in docs/DATABASE_SCHEMA.md.
+
+Done when:
+ [ ] "npm run migrate" creates all tables from scratch
+ [ ] "npm run seed" fills default categories
+ [ ] Foreign keys and indexes are verified in psql/pgAdmin
+
+
+==============================================================================
+PHASE 2 - BACKEND CORE (SERVER FOUNDATION)
+==============================================================================
+Goal: Running Express server with clean architecture and error handling.
+
+Files to fill:
+ - backend/src/server.js, app.js
+ - config/: env.js, db.js, logger.js, cors.js
+ - utils/: ApiError, ApiResponse, asyncHandler, constants, pagination,
+   dateHelpers
+ - middlewares/: error, notFound, validate, rateLimit
+ - routes/index.js
+ - backend/Dockerfile
+
+Tasks:
+ 2.1 Load and validate environment variables (fail fast if missing).
+ 2.2 PostgreSQL connection pool + health check.
+ 2.3 Express app: Helmet, CORS, JSON parser, request logging, rate limit.
+ 2.4 Standard response format { success, message, data, meta }.
+ 2.5 Central error handler + 404 handler.
+ 2.6 Route index with /api/v1 prefix and GET /api/v1/health.
+
+Done when:
+ [ ] GET /api/v1/health returns OK with DB status
+ [ ] Errors return clean JSON (no stack traces in production)
+ [ ] Logs are written to console and backend/logs
+
+
+==============================================================================
+PHASE 3 - AUTHENTICATION & USER MANAGEMENT (BACKEND)
+==============================================================================
+Goal: Secure auth system.
+
+Files to fill:
+ - routes/auth.routes.js, user.routes.js
+ - controllers/auth.controller.js, user.controller.js
+ - services/auth.service.js, user.service.js, email.service.js,
+   upload.service.js
+ - repositories/user.repository.js, refreshToken.repository.js
+ - middlewares/auth.middleware.js, role.middleware.js, upload.middleware.js
+ - validators/auth.validator.js, user.validator.js
+ - utils/jwt.js, hash.js
+ - templates/emails/welcome.html, resetPassword.html
+
+Endpoints:
+ POST /auth/register        POST /auth/login
+ POST /auth/refresh         POST /auth/logout
+ POST /auth/forgot-password POST /auth/reset-password
+ GET/PUT /users/me          PUT /users/me/password
+ POST /users/me/avatar      DELETE /users/me
+
+Tasks:
+ 3.1 Password hashing with bcrypt; strong password validation.
+ 3.2 Access token (15 min) + refresh token (7 days, stored hashed, rotated).
+ 3.3 Refresh token in httpOnly secure cookie.
+ 3.4 Auth middleware protecting private routes.
+ 3.5 Forgot/reset password flow with expiring token + email.
+ 3.6 Stricter rate limit on login/register endpoints.
+
+Done when:
+ [ ] Full register -> login -> refresh -> logout flow works in Postman
+ [ ] Wrong passwords and invalid tokens return correct errors
+ [ ] Tests pass: backend/tests/unit/auth.service.test.js and integration/auth
+
+
+==============================================================================
+PHASE 4 - BACKEND FINANCE MODULES
+==============================================================================
+Goal: All money-related APIs.
+
+Do these sub-steps in order, each = routes + controller + service +
+repository + validator for that resource.
+
+ 4.1 Categories   (list default+custom, create, update, delete with safety check)
+ 4.2 Accounts     (CRUD, archive, balance, transfer between accounts)
+ 4.3 Expenses     (CRUD, receipt upload, search, filters: date range, category,
+                   account, amount range, tags; sorting; pagination)
+ 4.4 Income       (CRUD, same filters)
+ 4.5 Budgets      (CRUD per month, spent vs limit calculation)
+ 4.6 Recurring    (CRUD, pause/resume, next_run_date calculation)
+
+Rules:
+ - Every query is filtered by the logged-in user_id (never trust client ids).
+ - Creating/updating/deleting an expense or income updates the account balance
+   inside a database TRANSACTION.
+ - Money is stored as NUMERIC(12,2), never float.
+
+Done when:
+ [ ] Each resource has working CRUD in Postman
+ [ ] A user cannot read or change another user's data
+ [ ] Balances stay correct after add/edit/delete
+ [ ] Tests: expense.service.test.js, budget.service.test.js,
+     integration/expense.test.js, integration/budget.test.js
+
+
+==============================================================================
+PHASE 5 - BACKEND INSIGHTS, JOBS & EXPORTS
+==============================================================================
+Goal: Dashboard data, reports, notifications, background jobs, exports.
+
+Files to fill:
+ - dashboard, report, notification, export routes/controllers/services
+ - repositories/notification.repository.js
+ - services/currency.service.js
+ - jobs/index.js, recurringTransactions.job.js, budgetAlerts.job.js,
+   weeklySummary.job.js
+ - templates/emails/budgetAlert.html, weeklySummary.html
+
+Endpoints:
+ GET /dashboard/summary         (balance, income, expense, savings this period)
+ GET /dashboard/trends          (daily/monthly series for charts)
+ GET /reports/monthly?year&month
+ GET /reports/yearly?year
+ GET /reports/by-category?from&to
+ GET /exports/expenses?format=csv|xlsx|pdf
+ GET /notifications  PUT /notifications/:id/read  PUT /notifications/read-all
+
+Tasks:
+ 5.1 SQL aggregate queries (SUM/GROUP BY) optimized with indexes.
+ 5.2 Recurring job: runs daily, creates due transactions, advances next date.
+ 5.3 Budget alert job/trigger: notify at threshold (e.g., 80%) and 100%.
+ 5.4 Weekly summary email job.
+ 5.5 CSV, Excel and PDF export generation.
+
+Done when:
+ [ ] Dashboard and report endpoints return correct totals
+ [ ] Jobs run on schedule and create notifications
+ [ ] Exports download and open correctly
+
+
+==============================================================================
+PHASE 6 - API DOCUMENTATION & BACKEND HARDENING
+==============================================================================
+Files to fill: backend/docs/openapi.yaml, config/swagger.js,
+docs/API_REFERENCE.md, backend/jest.config.js, backend/tests/setup.js
+
+Tasks:
+ 6.1 Document every endpoint in OpenAPI; serve Swagger UI at /api/docs.
+ 6.2 Security review: input validation, SQL parameterization, CORS, headers,
+     rate limits, file upload limits and types.
+ 6.3 Raise test coverage on services (target 70%+).
+
+Done when:
+ [ ] Swagger UI shows all endpoints and they can be tested from it
+ [ ] "npm test" passes
+
+
+==============================================================================
+PHASE 7 - FRONTEND FOUNDATION
+==============================================================================
+Goal: Frontend app shell, design system, routing, API client.
+
+Files to fill:
+ - frontend/src/main.jsx, App.jsx, index.css
+ - tailwind.config.js, postcss.config.js
+ - styles/variables.css, globals.css
+ - app/store.js, queryClient.js, providers.jsx
+ - routes/AppRoutes.jsx, ProtectedRoute.jsx, PublicRoute.jsx, paths.js
+ - api/axiosClient.js (+ attach token, auto-refresh on 401)
+ - utils/: formatCurrency, formatDate, constants, storage, validators, cn
+ - hooks/: useDebounce, useMediaQuery, useLocalStorage, useTheme, useToast
+ - i18n/index.js, en.json, ar.json
+ - components/ui/* (Button, Input, Select, Modal, Card, Table, Badge, Spinner,
+   Skeleton, Toast, Dropdown, Pagination, EmptyState, ConfirmDialog,
+   DatePicker, Tabs, Avatar, ErrorBoundary, FileUpload)
+ - components/common/* (PageHeader, SearchBar, ThemeToggle, CurrencyDisplay,
+   LoadingScreen)
+
+Tasks:
+ 7.1 Design tokens: colors, spacing, typography, dark/light variables.
+ 7.2 Build the reusable UI components first (small, accessible, responsive).
+ 7.3 Axios client with interceptors (token refresh queue).
+ 7.4 Router with public vs protected routes and lazy-loaded pages.
+ 7.5 i18n setup with RTL support.
+
+Done when:
+ [ ] App runs with routing, theme toggle and language switch
+ [ ] A test page shows all UI components in light and dark mode
+
+
+==============================================================================
+PHASE 8 - FRONTEND LAYOUTS & AUTH SCREENS
+==============================================================================
+Files to fill:
+ - layouts/: MainLayout, AuthLayout, Sidebar, Topbar, MobileBottomNav
+ - pages/auth/: Login, Register, ForgotPassword, ResetPassword
+ - features/auth/*, api/auth.api.js, api/users.api.js, hooks/useAuth.js
+ - pages/errors/NotFoundPage.jsx, ServerErrorPage.jsx
+
+Responsive behavior:
+ - Desktop: collapsible sidebar + topbar
+ - Tablet: icon-only sidebar
+ - Mobile: bottom navigation + slide-over menu + floating "Add" button
+
+Tasks:
+ 8.1 Build layouts, then auth pages with form validation (React Hook Form+Zod).
+ 8.2 Connect to backend auth; store auth state; auto-logout on refresh failure.
+ 8.3 Error pages and a global error boundary.
+
+Done when:
+ [ ] You can register, log in, refresh the page and stay logged in, log out
+ [ ] Layout works on phone, tablet and desktop widths
+
+
+==============================================================================
+PHASE 9 - FRONTEND CORE FINANCE SCREENS
+==============================================================================
+Build in this order. For each: api file -> hook -> form -> list/table -> page.
+
+ 9.1 Categories   (pages/categories, features/categories, api/categories.api.js)
+ 9.2 Accounts     (pages/accounts, features/accounts, api/accounts.api.js)
+ 9.3 Expenses     (pages/expenses, features/expenses, api/expenses.api.js)
+      - table on desktop, card list on mobile
+      - filters, search, sorting, pagination, receipt upload, edit/delete
+ 9.4 Income       (pages/income, features/income, api/income.api.js)
+ 9.5 Budgets      (pages/budgets, features/budgets, api/budgets.api.js)
+      - progress bars with color states (safe/warning/over)
+ 9.6 Recurring    (pages/recurring, features/recurring, api/recurring.api.js)
+
+UX rules: optimistic updates where safe, skeleton loading, empty states,
+confirm dialogs for delete, toast feedback for every action.
+
+Done when:
+ [ ] Every screen supports full CRUD against the real API
+ [ ] Each screen is usable on a phone
+ [ ] Tests: ExpenseForm.test.jsx, LoginForm.test.jsx pass
+
+
+==============================================================================
+PHASE 10 - FRONTEND DASHBOARD, REPORTS, NOTIFICATIONS, SETTINGS
+==============================================================================
+Files to fill:
+ - pages/dashboard + features/dashboard/* (SummaryCards, SpendingChart,
+   CategoryPieChart, RecentTransactions, BudgetOverview)
+ - pages/reports + features/reports/* (Monthly, Yearly, ExportButtons)
+ - pages/notifications + features/notifications/* (Bell in topbar, list)
+ - pages/settings/* (Profile, Security, Preferences)
+ - api: dashboard, reports, notifications
+
+Tasks:
+ 10.1 Dashboard with period selector (this month / last month / year / custom).
+ 10.2 Charts with Recharts (line/bar trend, pie by category), responsive.
+ 10.3 Reports with date range and export buttons (CSV/Excel/PDF).
+ 10.4 Notification bell with unread count; polling every 60s.
+ 10.5 Settings: profile + avatar, password, currency, language, theme.
+
+Done when:
+ [ ] Dashboard numbers match the backend reports
+ [ ] Exports download from the UI
+ [ ] Language/theme/currency preferences persist
+
+
+==============================================================================
+PHASE 11 - POLISH, PERFORMANCE & ACCESSIBILITY
+==============================================================================
+Tasks:
+ 11.1 Code splitting and lazy loading for pages and charts.
+ 11.2 Accessibility: keyboard navigation, aria labels, color contrast, focus.
+ 11.3 PWA basics: manifest.json, favicon, offline fallback (optional).
+ 11.4 SEO/meta tags for public pages; robots.txt.
+ 11.5 Cross-browser and device testing; Lighthouse score 90+.
+ 11.6 Review all empty/error/loading states.
+
+Done when:
+ [ ] Lighthouse: Performance, Accessibility, Best Practices all 90+
+ [ ] No console errors or warnings
+
+
+==============================================================================
+PHASE 12 - TESTING, CI/CD & DEPLOYMENT
+==============================================================================
+Files to fill: frontend/Dockerfile, frontend/nginx.conf, backend/Dockerfile,
+docker-compose.yml, .github/workflows/ci.yml, deploy.yml, docs/DEPLOYMENT.md,
+docs/ARCHITECTURE.md, docs/CONTRIBUTING.md, README.md
+
+Tasks:
+ 12.1 CI pipeline: install, lint, test (backend + frontend), build.
+ 12.2 Dockerize both apps; docker-compose for full local stack.
+ 12.3 Production database (managed PostgreSQL), run migrations on deploy.
+ 12.4 Deploy: backend (Render/Railway/Fly/VPS), frontend (Vercel/Netlify or
+      nginx container), set environment variables and HTTPS.
+ 12.5 Backups for PostgreSQL, monitoring/logging, uptime check.
+ 12.6 Final documentation: README with setup steps and screenshots.
+
+Done when:
+ [ ] CI is green on every push
+ [ ] App is live over HTTPS and works end to end
+ [ ] README lets a new developer run the project in under 15 minutes
+
+
+==============================================================================
+FUTURE IDEAS (AFTER VERSION 1)
+==============================================================================
+ - Bank/CSV import, receipt OCR, shared/family budgets, savings goals,
+   debt tracking, investment tracking, 2FA, mobile app (React Native),
+   AI spending insights, live currency conversion
+
+
+==============================================================================
+SUGGESTED WORKFLOW FOR EACH STEP
+==============================================================================
+ 1. Tell me the phase and step (example: "Phase 3, step 3.2").
+ 2. I give you the complete code for those empty files, ready to paste.
+ 3. You paste, run, and test using the "Done when" list.
+ 4. Commit to Git with a clear message before the next step.
+ 5. For changes to files that already have code, I will give exact
+    Find: / Replace: blocks.
+
+START HERE: Phase 0, step 0.1
+==============================================================================
