@@ -12,6 +12,9 @@
     "start": "node src/server.js",
     "migrate": "node database/migrate.js",
     "seed": "node database/seed.js",
+    "seed:demo": "node database/seed.js --demo",
+    "migrate:status": "node database/migrate.js --status",
+    "migrate:reset": "node database/migrate.js --reset",
     "lint": "eslint src tests",
     "format": "prettier --write .",
     "test": "jest --runInBand"
