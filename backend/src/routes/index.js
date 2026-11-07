@@ -33,8 +33,9 @@ router.get(
   }),
 );
 
+router.use('/auth', require('./auth.routes'));
+
 // Feature routers are mounted here as their phases are built, for example:
-//   router.use('/auth', require('./auth.routes'));        (Phase 3)
 //   router.use('/expenses', require('./expense.routes')); (Phase 4)
 
 module.exports = router;
