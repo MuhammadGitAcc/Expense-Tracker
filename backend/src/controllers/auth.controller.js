@@ -42,4 +42,19 @@ const logout = asyncHandler(async (req, res) => {
   return ApiResponse.success(res, { message: 'Logged out' });
 });
 
-module.exports = { register, login, refresh, logout };
+const forgotPassword = asyncHandler(async (req, res) => {
+  await authService.forgotPassword(req.body);
+  return ApiResponse.success(res, {
+    message: 'If an account with that email exists, a reset link has been sent',
+  });
+});
+
+const resetPassword = asyncHandler(async (req, res) => {
+  await authService.resetPassword(req.body);
+  clearRefreshCookie(res);
+  return ApiResponse.success(res, {
+    message: 'Password updated. Please log in with your new password',
+  });
+});
+
+module.exports = { register, login, refresh, logout, forgotPassword, resetPassword };

@@ -1,10 +1,19 @@
 'use strict';
 
+const env = require('../config/env');
 const db = require('../config/db');
 const ApiError = require('../utils/ApiError');
 const userRepository = require('../repositories/user.repository');
 const refreshTokenRepository = require('../repositories/refreshToken.repository');
-const { hashPassword, comparePassword, DUMMY_HASH, hashToken } = require('../utils/hash');
+const passwordResetTokenRepository = require('../repositories/passwordResetToken.repository');
+const emailService = require('./email.service');
+const {
+  hashPassword,
+  comparePassword,
+  DUMMY_HASH,
+  hashToken,
+  generateRandomToken,
+} = require('../utils/hash');
 const { signAccessToken, signRefreshToken, verifyRefreshToken } = require('../utils/jwt');
 
 /**
@@ -29,10 +38,14 @@ async function register({ name, email, password }) {
   }
   const passwordHash = await hashPassword(password);
 
-  return db.withTransaction(async (client) => {
+  const result = await db.withTransaction(async (client) => {
     const user = await userRepository.create({ name, email, passwordHash }, client);
     return issueTokens(user, client);
   });
+
+  emailService.sendWelcomeEmail(result.user);
+
+  return result;
 }
 
 /**
@@ -87,4 +100,43 @@ async function logout(rawToken) {
   await refreshTokenRepository.revokeByHash(hashToken(rawToken));
 }
 
-module.exports = { register, login, refresh, logout };
+const RESET_TOKEN_MINUTES = 30;
+
+async function forgotPassword({ email }) {
+  const user = await userRepository.findByEmail(email);
+  if (!user) return;
+
+  const token = generateRandomToken();
+  const expiresAt = new Date(Date.now() + RESET_TOKEN_MINUTES * 60 * 1000);
+
+  await db.withTransaction(async (client) => {
+    await passwordResetTokenRepository.invalidateAllForUser(user.id, client);
+    await passwordResetTokenRepository.create(
+      { userId: user.id, tokenHash: hashToken(token), expiresAt },
+      client,
+    );
+  });
+
+  const resetUrl = `${env.frontendUrl}/reset-password?token=${encodeURIComponent(token)}`;
+  emailService.sendPasswordResetEmail({
+    user,
+    resetUrl,
+    expiresInMinutes: RESET_TOKEN_MINUTES,
+  });
+}
+
+async function resetPassword({ token, password }) {
+  const tokenHash = hashToken(token);
+  const passwordHash = await hashPassword(password);
+
+  await db.withTransaction(async (client) => {
+    const userId = await passwordResetTokenRepository.claimByHash(tokenHash, client);
+    if (!userId) throw ApiError.badRequest('This reset link is invalid or has expired');
+
+    await userRepository.updatePassword(userId, passwordHash, client);
+    await refreshTokenRepository.revokeAllForUser(userId, client);
+    await passwordResetTokenRepository.invalidateAllForUser(userId, client);
+  });
+}
+
+module.exports = { register, login, refresh, logout, forgotPassword, resetPassword };
