@@ -29,4 +29,30 @@ const remove = asyncHandler(async (req, res) => {
   return ApiResponse.success(res, { message: 'Expense deleted', data: result });
 });
 
-module.exports = { list, getOne, create, update, remove };
+const uploadReceipt = asyncHandler(async (req, res) => {
+  const expense = await expenseService.attachReceipt(req.user.id, req.params.id, req.file);
+  return ApiResponse.success(res, { message: 'Receipt saved', data: { expense } });
+});
+
+const removeReceipt = asyncHandler(async (req, res) => {
+  const expense = await expenseService.removeReceipt(req.user.id, req.params.id);
+  return ApiResponse.success(res, { message: 'Receipt removed', data: { expense } });
+});
+
+// Sends the file itself, only to its owner. private: shared caches must not keep it.
+const downloadReceipt = asyncHandler(async (req, res) => {
+  const filePath = await expenseService.getReceiptPath(req.user.id, req.params.id);
+  res.setHeader('Cache-Control', 'private, no-store');
+  return res.sendFile(filePath);
+});
+
+module.exports = {
+  list,
+  getOne,
+  create,
+  update,
+  remove,
+  uploadReceipt,
+  removeReceipt,
+  downloadReceipt,
+};

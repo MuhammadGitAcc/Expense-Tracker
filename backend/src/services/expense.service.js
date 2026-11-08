@@ -6,6 +6,7 @@ const { getPagination, buildMeta } = require('../utils/pagination');
 const expenseRepository = require('../repositories/expense.repository');
 const accountRepository = require('../repositories/account.repository');
 const categoryRepository = require('../repositories/category.repository');
+const uploadService = require('./upload.service');
 
 /** The category must be a default or the user's own, and an EXPENSE category. */
 async function assertExpenseCategory(userId, categoryId, client) {
@@ -108,9 +109,12 @@ async function update(userId, id, fields) {
   });
 }
 
-/** Delete an expense and give its amount back to the account, in one transaction. */
+/**
+ * Delete an expense and give its amount back to the account, in one transaction. The
+ * receipt file is deleted after the commit, when the database rows are really gone.
+ */
 async function remove(userId, id) {
-  return db.withTransaction(async (client) => {
+  const result = await db.withTransaction(async (client) => {
     const current = await expenseRepository.lockById(id, userId, client);
     if (!current) throw ApiError.notFound('Expense not found');
 
@@ -122,8 +126,57 @@ async function remove(userId, id) {
       client,
     );
     await expenseRepository.deleteById(id, userId, client);
-    return { accounts: [account] };
+    return { accounts: [account], receiptFile: current.receiptFile };
   });
+
+  await uploadService.deleteReceiptFile(result.receiptFile);
+  return { accounts: result.accounts };
 }
 
-module.exports = { list, getById, create, update, remove };
+/** Attach (or replace) the receipt of an expense. Resolves the updated expense. */
+async function attachReceipt(userId, id, file) {
+  if (!file) throw ApiError.badRequest('Choose a file to upload (form field name: receipt)');
+  await getById(userId, id); // 404 before any file is written
+
+  const filename = await uploadService.saveReceipt(userId, file);
+  try {
+    const previous = await expenseRepository.getReceiptFile(id, userId);
+    const updated = await expenseRepository.setReceiptFile(id, userId, filename);
+    if (!updated) throw ApiError.notFound('Expense not found');
+    await uploadService.deleteReceiptFile(previous);
+  } catch (err) {
+    await uploadService.deleteReceiptFile(filename); // no orphan file when saving fails
+    throw err;
+  }
+  return getById(userId, id);
+}
+
+async function removeReceipt(userId, id) {
+  const file = await expenseRepository.getReceiptFile(id, userId);
+  if (file === undefined) throw ApiError.notFound('Expense not found');
+  if (file === null) throw ApiError.notFound('This expense has no receipt');
+
+  await expenseRepository.setReceiptFile(id, userId, null);
+  await uploadService.deleteReceiptFile(file);
+  return getById(userId, id);
+}
+
+/** Absolute path of the receipt file of the user's own expense (for the download route). */
+async function getReceiptPath(userId, id) {
+  const file = await expenseRepository.getReceiptFile(id, userId);
+  if (file === undefined) throw ApiError.notFound('Expense not found');
+  const fullPath = await uploadService.resolveReceiptFile(file);
+  if (!fullPath) throw ApiError.notFound('This expense has no receipt');
+  return fullPath;
+}
+
+module.exports = {
+  list,
+  getById,
+  create,
+  update,
+  remove,
+  attachReceipt,
+  removeReceipt,
+  getReceiptPath,
+};

@@ -4,11 +4,13 @@ jest.mock('../../src/config/db', () => ({ withTransaction: jest.fn() }));
 jest.mock('../../src/repositories/expense.repository');
 jest.mock('../../src/repositories/account.repository');
 jest.mock('../../src/repositories/category.repository');
+jest.mock('../../src/services/upload.service');
 
 const db = require('../../src/config/db');
 const expenseRepository = require('../../src/repositories/expense.repository');
 const accountRepository = require('../../src/repositories/account.repository');
 const categoryRepository = require('../../src/repositories/category.repository');
+const uploadService = require('../../src/services/upload.service');
 const expenseService = require('../../src/services/expense.service');
 
 const CLIENT = { name: 'transaction-client' };
@@ -194,6 +196,109 @@ describe('remove', () => {
     expect(accountRepository.credit).toHaveBeenCalledWith('acc-1', USER_ID, '30.00', CLIENT);
     expect(expenseRepository.deleteById).toHaveBeenCalledWith('exp-1', USER_ID, CLIENT);
     expect(result.accounts[0].balance).toBe('130.00');
+  });
+});
+
+describe('receipts', () => {
+  const FILE = { buffer: Buffer.from('x') };
+
+  it('refuses a request without a file', async () => {
+    await expect(expenseService.attachReceipt(USER_ID, 'exp-1', undefined)).rejects.toMatchObject({
+      statusCode: 400,
+    });
+    expect(uploadService.saveReceipt).not.toHaveBeenCalled();
+  });
+
+  it('answers 404 before any file is written when the expense is not the user own', async () => {
+    expenseRepository.findById.mockResolvedValue(null);
+
+    await expect(expenseService.attachReceipt(USER_ID, 'x', FILE)).rejects.toMatchObject({
+      statusCode: 404,
+    });
+    expect(uploadService.saveReceipt).not.toHaveBeenCalled();
+  });
+
+  it('saves the new file, stores its name and deletes the previous file', async () => {
+    expenseRepository.findById.mockResolvedValue(EXPENSE);
+    uploadService.saveReceipt.mockResolvedValue('new.png');
+    expenseRepository.getReceiptFile.mockResolvedValue('old.png');
+    expenseRepository.setReceiptFile.mockResolvedValue(true);
+
+    const result = await expenseService.attachReceipt(USER_ID, 'exp-1', FILE);
+
+    expect(uploadService.saveReceipt).toHaveBeenCalledWith(USER_ID, FILE);
+    expect(expenseRepository.setReceiptFile).toHaveBeenCalledWith('exp-1', USER_ID, 'new.png');
+    expect(uploadService.deleteReceiptFile).toHaveBeenCalledWith('old.png');
+    expect(uploadService.deleteReceiptFile).not.toHaveBeenCalledWith('new.png');
+    expect(result).toEqual(EXPENSE);
+  });
+
+  it('deletes the new file again when the database update fails (no orphan file)', async () => {
+    expenseRepository.findById.mockResolvedValue(EXPENSE);
+    uploadService.saveReceipt.mockResolvedValue('new.png');
+    expenseRepository.getReceiptFile.mockResolvedValue(null);
+    expenseRepository.setReceiptFile.mockRejectedValue(new Error('db down'));
+
+    await expect(expenseService.attachReceipt(USER_ID, 'exp-1', FILE)).rejects.toThrow('db down');
+    expect(uploadService.deleteReceiptFile).toHaveBeenCalledWith('new.png');
+  });
+
+  it('answers 404 and deletes the new file when the expense vanished meanwhile', async () => {
+    expenseRepository.findById.mockResolvedValue(EXPENSE);
+    uploadService.saveReceipt.mockResolvedValue('new.png');
+    expenseRepository.getReceiptFile.mockResolvedValue(null);
+    expenseRepository.setReceiptFile.mockResolvedValue(false);
+
+    await expect(expenseService.attachReceipt(USER_ID, 'exp-1', FILE)).rejects.toMatchObject({
+      statusCode: 404,
+    });
+    expect(uploadService.deleteReceiptFile).toHaveBeenCalledWith('new.png');
+  });
+
+  it('removes a receipt: clears the column, then deletes the file', async () => {
+    expenseRepository.getReceiptFile.mockResolvedValue('a.png');
+    expenseRepository.setReceiptFile.mockResolvedValue(true);
+    expenseRepository.findById.mockResolvedValue(EXPENSE);
+
+    await expenseService.removeReceipt(USER_ID, 'exp-1');
+
+    expect(expenseRepository.setReceiptFile).toHaveBeenCalledWith('exp-1', USER_ID, null);
+    expect(uploadService.deleteReceiptFile).toHaveBeenCalledWith('a.png');
+  });
+
+  it('answers 404 when removing a receipt of an unknown expense or one without a receipt', async () => {
+    expenseRepository.getReceiptFile.mockResolvedValueOnce(undefined);
+    await expect(expenseService.removeReceipt(USER_ID, 'x')).rejects.toMatchObject({
+      statusCode: 404,
+    });
+
+    expenseRepository.getReceiptFile.mockResolvedValueOnce(null);
+    await expect(expenseService.removeReceipt(USER_ID, 'exp-1')).rejects.toMatchObject({
+      statusCode: 404,
+    });
+  });
+
+  it('resolves the path of the own receipt and answers 404 when it is missing', async () => {
+    expenseRepository.getReceiptFile.mockResolvedValue('a.png');
+    uploadService.resolveReceiptFile.mockResolvedValueOnce('/data/receipts/a.png');
+    expect(await expenseService.getReceiptPath(USER_ID, 'exp-1')).toBe('/data/receipts/a.png');
+
+    uploadService.resolveReceiptFile.mockResolvedValueOnce(null);
+    await expect(expenseService.getReceiptPath(USER_ID, 'exp-1')).rejects.toMatchObject({
+      statusCode: 404,
+    });
+  });
+
+  it('deletes the receipt file after the expense is deleted', async () => {
+    expenseRepository.lockById.mockResolvedValue({ ...CURRENT, receiptFile: 'a.png' });
+    accountRepository.lockForUpdate.mockResolvedValue([ACCOUNT]);
+    accountRepository.credit.mockResolvedValue(ACCOUNT);
+
+    const result = await expenseService.remove(USER_ID, 'exp-1');
+
+    expect(expenseRepository.deleteById).toHaveBeenCalled();
+    expect(uploadService.deleteReceiptFile).toHaveBeenCalledWith('a.png');
+    expect(result).toEqual({ accounts: [ACCOUNT] });
   });
 });
 

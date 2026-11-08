@@ -57,6 +57,7 @@ async function deleteAccount(userId, { password }) {
   if (!matches) throw ApiError.badRequest('Password is incorrect');
 
   await userRepository.deleteById(userId);
+  await uploadService.deleteAllReceiptsOfUser(userId);
   await uploadService.deleteAvatarFile(found.avatarUrl);
 }
 

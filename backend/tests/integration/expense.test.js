@@ -10,13 +10,36 @@ const {
   closeDatabase,
 } = require('../helpers');
 
+const fs = require('fs');
+const path = require('path');
+const { UPLOAD_ROOT } = require('../../src/services/upload.service');
+
 const UNKNOWN_ID = '3f2b8c1e-5d4a-4b6e-9a7c-1d2e3f4a5b6c';
+
+const PNG = Buffer.concat([
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+  Buffer.alloc(200),
+]);
+const PDF = Buffer.from('%PDF-1.4\n% a fake receipt\n');
+const receiptFilesOf = (userId) => {
+  const dir = path.join(UPLOAD_ROOT, 'receipts');
+  return fs.existsSync(dir) ? fs.readdirSync(dir).filter((name) => name.startsWith(userId)) : [];
+};
+// Collect the bytes of any response (supertest does not buffer PDFs by default).
+const binaryParser = (res, callback) => {
+  const chunks = [];
+  res.on('data', (chunk) => chunks.push(chunk));
+  res.on('end', () => callback(null, Buffer.concat(chunks)));
+};
 
 beforeEach(async () => {
   await resetDatabase();
   await seedDefaultCategories();
 });
-afterAll(closeDatabase);
+afterAll(async () => {
+  fs.rmSync(path.join(UPLOAD_ROOT, 'receipts'), { recursive: true, force: true });
+  await closeDatabase();
+});
 
 const as = (token, method, path, body) => {
   const req = api()[method](url(path)).set(authHeader(token));
@@ -298,6 +321,149 @@ describe('DELETE /expenses/:id', () => {
     expect(res.status).toBe(404);
     expect((await getExpense(token, expense.id)).status).toBe(200);
     expect(await balanceOf(token, wallet.id)).toBe('970.00');
+  });
+});
+
+describe('receipts', () => {
+  const attach = (token, id, buffer, filename = 'receipt.png', contentType = 'image/png') =>
+    api()
+      .post(url(`/expenses/${id}/receipt`))
+      .set(authHeader(token))
+      .attach('receipt', buffer, { filename, contentType });
+  const download = (token, id) =>
+    api()
+      .get(url(`/expenses/${id}/receipt`))
+      .set(authHeader(token))
+      .buffer(true)
+      .parse(binaryParser);
+
+  async function oneExpense(overrides) {
+    const ctx = await setup(overrides);
+    const { expense } = (
+      await addExpense(ctx.token, { accountId: ctx.wallet.id, categoryId: ctx.food.id, amount: 10 })
+    ).body.data;
+    return { ...ctx, expense };
+  }
+
+  it('saves a PNG, exposes a private download route and sends the exact file to the owner', async () => {
+    const { token, user, expense } = await oneExpense();
+
+    const res = await attach(token, expense.id, PNG);
+    const file = await download(token, expense.id);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.expense.receiptUrl).toMatch(
+      new RegExp(`/expenses/${expense.id}/receipt$`),
+    );
+    expect(receiptFilesOf(user.id)).toHaveLength(1);
+    expect(file.status).toBe(200);
+    expect(file.headers['content-type']).toMatch(/image\/png/);
+    expect(file.headers['cache-control']).toMatch(/private/);
+    expect(file.body.equals(PNG)).toBe(true);
+  });
+
+  it('replaces the receipt and deletes the old file; a PDF is allowed', async () => {
+    const { token, user, expense } = await oneExpense();
+    await attach(token, expense.id, PNG);
+
+    const res = await attach(token, expense.id, PDF, 'receipt.pdf', 'application/pdf');
+    const file = await download(token, expense.id);
+
+    expect(res.status).toBe(200);
+    expect(receiptFilesOf(user.id)).toHaveLength(1);
+    expect(file.headers['content-type']).toMatch(/application\/pdf/);
+    expect(file.body.equals(PDF)).toBe(true);
+  });
+
+  it('is not reachable as a public static file', async () => {
+    const { token, user, expense } = await oneExpense();
+    await attach(token, expense.id, PNG);
+    const [stored] = receiptFilesOf(user.id);
+
+    const res = await api().get(`/uploads/receipts/${stored}`);
+
+    expect(res.status).toBe(404);
+  });
+
+  it('rejects content that is not an image or a PDF, whatever name or type it claims', async () => {
+    const { token, user, expense } = await oneExpense();
+
+    const fake = await attach(token, expense.id, Buffer.from('just text'), 'evil.png', 'image/png');
+    const none = await api()
+      .post(url(`/expenses/${expense.id}/receipt`))
+      .set(authHeader(token));
+    const big = await attach(
+      token,
+      expense.id,
+      Buffer.concat([PNG, Buffer.alloc(1.5 * 1024 * 1024)]),
+    );
+
+    expect(fake.status).toBe(400);
+    expect(fake.body.message).toMatch(/JPEG, PNG, WebP or PDF/);
+    expect(none.status).toBe(400);
+    expect(big.status).toBe(400);
+    expect(big.body.message).toMatch(/at most 1 MB/);
+    expect(receiptFilesOf(user.id)).toHaveLength(0);
+  });
+
+  it('keeps receipts away from other users and from visitors without a token', async () => {
+    const { token, user, expense } = await oneExpense();
+    const other = await setup({ email: 'other@example.com' });
+    await attach(token, expense.id, PNG);
+
+    const steal = await download(other.token, expense.id);
+    const overwrite = await attach(other.token, expense.id, PNG);
+    const remove = await as(other.token, 'delete', `/expenses/${expense.id}/receipt`);
+    const anonymous = await api().get(url(`/expenses/${expense.id}/receipt`));
+
+    expect(steal.status).toBe(404);
+    expect(overwrite.status).toBe(404);
+    expect(remove.status).toBe(404);
+    expect(anonymous.status).toBe(401);
+    expect(receiptFilesOf(user.id)).toHaveLength(1);
+    expect(receiptFilesOf(other.user.id)).toHaveLength(0);
+  });
+
+  it('answers 404 for an expense without a receipt', async () => {
+    const { token, expense } = await oneExpense();
+
+    expect((await download(token, expense.id)).status).toBe(404);
+    expect((await as(token, 'delete', `/expenses/${expense.id}/receipt`)).status).toBe(404);
+  });
+
+  it('removes the receipt and its file', async () => {
+    const { token, user, expense } = await oneExpense();
+    await attach(token, expense.id, PNG);
+
+    const res = await as(token, 'delete', `/expenses/${expense.id}/receipt`);
+    const again = await as(token, 'delete', `/expenses/${expense.id}/receipt`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.expense.receiptUrl).toBeNull();
+    expect(receiptFilesOf(user.id)).toHaveLength(0);
+    expect(again.status).toBe(404);
+  });
+
+  it('deletes the file when the expense is deleted', async () => {
+    const { token, user, expense } = await oneExpense();
+    await attach(token, expense.id, PNG);
+
+    await delExpense(token, expense.id);
+
+    expect(receiptFilesOf(user.id)).toHaveLength(0);
+  });
+
+  it('deletes all receipt files when the account is deleted', async () => {
+    const { token, user, expense } = await oneExpense();
+    await attach(token, expense.id, PNG);
+
+    const res = await api()
+      .delete(url('/users/me'))
+      .set(authHeader(token))
+      .send({ password: 'Test@12345' });
+
+    expect(res.status).toBe(200);
+    expect(receiptFilesOf(user.id)).toHaveLength(0);
   });
 });
 

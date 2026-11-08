@@ -1,6 +1,7 @@
 'use strict';
 
 const db = require('../config/db');
+const env = require('../config/env');
 
 /**
  * SQL for the expenses table. Every query filters by user_id: a client id is never trusted
@@ -31,7 +32,8 @@ const mapExpense = (row) =>
     note: row.note,
     paymentMethod: row.payment_method,
     tags: row.tags,
-    receiptUrl: row.receipt_url,
+    // The column holds the stored file name; the API exposes the (private) download route.
+    receiptUrl: row.receipt_url ? `${env.apiPrefix}/expenses/${row.id}/receipt` : null,
     recurringId: row.recurring_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -117,7 +119,7 @@ async function findById(id, userId, client = db) {
  */
 async function lockById(id, userId, client) {
   const { rows } = await client.query(
-    `SELECT id, account_id, category_id, amount FROM expenses
+    `SELECT id, account_id, category_id, amount, receipt_url FROM expenses
      WHERE id = $1 AND user_id = $2 FOR UPDATE`,
     [id, userId],
   );
@@ -127,6 +129,7 @@ async function lockById(id, userId, client) {
         accountId: rows[0].account_id,
         categoryId: rows[0].category_id,
         amount: rows[0].amount,
+        receiptFile: rows[0].receipt_url,
       }
     : null;
 }
@@ -186,4 +189,35 @@ async function deleteById(id, userId, client = db) {
   return rowCount > 0;
 }
 
-module.exports = { list, summary, findById, lockById, create, update, deleteById };
+/**
+ * The stored receipt file name: a string, null when the expense has no receipt, undefined
+ * when the expense does not exist or belongs to someone else.
+ */
+async function getReceiptFile(id, userId, client = db) {
+  const { rows } = await client.query(
+    'SELECT receipt_url FROM expenses WHERE id = $1 AND user_id = $2',
+    [id, userId],
+  );
+  return rows[0] ? rows[0].receipt_url : undefined;
+}
+
+/** Set (or clear with null) the receipt file name. Resolves true when the expense exists. */
+async function setReceiptFile(id, userId, filename, client = db) {
+  const { rowCount } = await client.query(
+    'UPDATE expenses SET receipt_url = $3 WHERE id = $1 AND user_id = $2',
+    [id, userId, filename],
+  );
+  return rowCount > 0;
+}
+
+module.exports = {
+  list,
+  summary,
+  findById,
+  lockById,
+  create,
+  update,
+  deleteById,
+  getReceiptFile,
+  setReceiptFile,
+};
