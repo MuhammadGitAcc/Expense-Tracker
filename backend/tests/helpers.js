@@ -71,6 +71,15 @@ const expireVerificationCodes = () =>
   db.query("UPDATE email_verification_codes SET expires_at = NOW() - INTERVAL '1 minute'");
 
 const resetDatabase = () => db.query('TRUNCATE TABLE users CASCADE');
+
+/** TRUNCATE ... CASCADE also empties categories (it references users), so put two defaults back. */
+const seedDefaultCategories = () =>
+  db.query(
+    `INSERT INTO categories (user_id, name, type, icon, color, is_default) VALUES
+       (NULL, 'Food',   'expense', 'utensils',  '#F97316', TRUE),
+       (NULL, 'Salary', 'income',  'briefcase', '#16A34A', TRUE)
+     ON CONFLICT (type, LOWER(name)) WHERE user_id IS NULL DO NOTHING`,
+  );
 const closeDatabase = () => db.close();
 
 module.exports = {
@@ -85,5 +94,6 @@ module.exports = {
   ageVerificationCodes,
   expireVerificationCodes,
   resetDatabase,
+  seedDefaultCategories,
   closeDatabase,
 };
