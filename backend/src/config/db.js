@@ -1,6 +1,10 @@
 'use strict';
 
-const { Pool } = require('pg');
+const { Pool, types } = require('pg');
+
+// DATE columns (transaction dates) come back as "YYYY-MM-DD" strings, not JavaScript Dates,
+// which the server time zone would shift. NUMERIC already stays a string: never a float.
+types.setTypeParser(types.builtins.DATE, (value) => value);
 const env = require('./env');
 const logger = require('./logger');
 
