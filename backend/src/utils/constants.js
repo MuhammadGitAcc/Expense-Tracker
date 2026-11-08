@@ -18,6 +18,14 @@ const NOTIFICATION_TYPES = Object.freeze([
 
 const PAGINATION = Object.freeze({ DEFAULT_LIMIT: 20, MAX_LIMIT: 100 });
 
+// Sign-up email verification (Phase 3B).
+const EMAIL_VERIFICATION = Object.freeze({
+  CODE_LENGTH: 6,
+  EXPIRES_MINUTES: 10,
+  MAX_ATTEMPTS: 5,
+  RESEND_COOLDOWN_SECONDS: 60,
+});
+
 module.exports = {
   ROLES,
   THEMES,
@@ -28,4 +36,5 @@ module.exports = {
   FREQUENCIES,
   NOTIFICATION_TYPES,
   PAGINATION,
+  EMAIL_VERIFICATION,
 };

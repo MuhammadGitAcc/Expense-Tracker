@@ -9,7 +9,12 @@ const ApiError = require('../utils/ApiError');
 /** Convert any thrown value into { status, message, details }. */
 function normalize(err) {
   if (err instanceof ApiError) {
-    return { status: err.statusCode, message: err.message, details: err.details };
+    return {
+      status: err.statusCode,
+      message: err.message,
+      details: err.details,
+      code: err.code,
+    };
   }
 
   if (err instanceof ZodError) {
@@ -53,7 +58,7 @@ function normalize(err) {
 }
 
 function errorMiddleware(err, req, res, _next) {
-  const { status, message, details } = normalize(err);
+  const { status, message, details, code } = normalize(err);
   const isServerError = status >= 500;
 
   const context = { method: req.method, url: req.originalUrl, status };
@@ -68,6 +73,7 @@ function errorMiddleware(err, req, res, _next) {
     null,
   );
   if (details) payload.errors = details;
+  if (code) payload.code = code;
   if (isServerError && !env.isProduction) payload.stack = err.stack;
 
   if (res.headersSent) return res.end();

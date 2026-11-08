@@ -95,4 +95,22 @@ function sendPasswordResetEmail({ user, resetUrl, expiresInMinutes }) {
   });
 }
 
-module.exports = { sendMail, sendWelcomeEmail, sendPasswordResetEmail };
+function sendVerificationEmail({ user, code, expiresInMinutes }) {
+  return sendMail({
+    to: user.email,
+    subject: `Your ${APP_NAME} verification code: ${code}`,
+    html: renderTemplate('verifyEmail', {
+      appName: APP_NAME,
+      name: user.name,
+      code,
+      expiresInMinutes,
+    }),
+    text:
+      `Hi ${user.name},\n\n` +
+      `Your ${APP_NAME} verification code is: ${code}\n\n` +
+      `It is valid for ${expiresInMinutes} minutes and can be used once.\n` +
+      'If you did not create an account, you can ignore this email.\n',
+  });
+}
+
+module.exports = { sendMail, sendWelcomeEmail, sendPasswordResetEmail, sendVerificationEmail };

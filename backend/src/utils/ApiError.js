@@ -6,11 +6,12 @@
  *   throw ApiError.notFound('Expense not found');
  */
 class ApiError extends Error {
-  constructor(statusCode, message, details = null) {
+  constructor(statusCode, message, details = null, code = null) {
     super(message);
     this.name = 'ApiError';
     this.statusCode = statusCode;
     this.details = details; // optional, e.g. field-level validation errors
+    this.code = code; // optional machine-readable code, e.g. 'EMAIL_NOT_VERIFIED'
     this.isOperational = true;
     Error.captureStackTrace?.(this, this.constructor);
   }
@@ -23,6 +24,9 @@ class ApiError extends Error {
   }
   static forbidden(message = 'You do not have permission to do this') {
     return new ApiError(403, message);
+  }
+  static emailNotVerified(message = 'Please verify your email address first') {
+    return new ApiError(403, message, null, 'EMAIL_NOT_VERIFIED');
   }
   static notFound(message = 'Resource not found') {
     return new ApiError(404, message);
