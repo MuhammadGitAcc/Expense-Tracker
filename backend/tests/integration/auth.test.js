@@ -7,7 +7,9 @@ const {
   api,
   url,
   refreshCookie,
+  registerUnverified,
   registerUser,
+  verifyEmail,
   resetDatabase,
   closeDatabase,
 } = require('../helpers');
@@ -17,12 +19,24 @@ afterEach(() => jest.restoreAllMocks());
 afterAll(closeDatabase);
 
 describe('POST /auth/register', () => {
-  it('creates the account, returns an access token and sets an httpOnly refresh cookie', async () => {
-    const res = await api().post(url('/auth/register')).send(DEFAULT_USER);
+  it('creates an unverified account and logs nobody in: no token and no cookie', async () => {
+    const { res } = await registerUnverified();
 
     expect(res.status).toBe(201);
+    expect(res.body.data).toEqual({ email: DEFAULT_USER.email, expiresInMinutes: 10 });
+    expect(res.body.data).not.toHaveProperty('accessToken');
+    expect(res.headers['set-cookie']).toBeUndefined();
+  });
+
+  it('returns an access token and an httpOnly refresh cookie once the email is verified', async () => {
+    const { code } = await registerUnverified();
+
+    const res = await verifyEmail(DEFAULT_USER.email, code);
+
+    expect(res.status).toBe(200);
     expect(res.body.data.user.email).toBe(DEFAULT_USER.email);
     expect(res.body.data.user.role).toBe('user');
+    expect(res.body.data.user.emailVerified).toBe(true);
     expect(res.body.data.user).not.toHaveProperty('passwordHash');
     expect(res.body.data.accessToken).toEqual(expect.any(String));
     expect(res.headers['set-cookie'][0]).toMatch(

@@ -11,10 +11,26 @@ const setRefreshCookie = (res, token) =>
 // The options (especially path) must match the ones used to set the cookie.
 const clearRefreshCookie = (res) => res.clearCookie(REFRESH_COOKIE_NAME, refreshCookieOptions());
 
+// No tokens and no cookie here: the user must confirm the email code first.
 const register = asyncHandler(async (req, res) => {
-  const { user, accessToken, refreshToken } = await authService.register(req.body);
+  const { user, expiresInMinutes } = await authService.register(req.body);
+  return ApiResponse.created(res, {
+    message: 'Account created. Check your email for a 6-digit code',
+    data: { email: user.email, expiresInMinutes },
+  });
+});
+
+const verifyEmail = asyncHandler(async (req, res) => {
+  const { user, accessToken, refreshToken } = await authService.verifyEmail(req.body);
   setRefreshCookie(res, refreshToken);
-  return ApiResponse.created(res, { message: 'Account created', data: { user, accessToken } });
+  return ApiResponse.success(res, { message: 'Email verified', data: { user, accessToken } });
+});
+
+const resendVerification = asyncHandler(async (req, res) => {
+  await authService.resendVerification(req.body);
+  return ApiResponse.success(res, {
+    message: 'If the account exists and is not verified yet, a new code has been sent',
+  });
 });
 
 const login = asyncHandler(async (req, res) => {
@@ -57,4 +73,13 @@ const resetPassword = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = { register, login, refresh, logout, forgotPassword, resetPassword };
+module.exports = {
+  register,
+  verifyEmail,
+  resendVerification,
+  login,
+  refresh,
+  logout,
+  forgotPassword,
+  resetPassword,
+};
