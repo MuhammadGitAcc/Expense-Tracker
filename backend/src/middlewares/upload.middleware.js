@@ -31,4 +31,24 @@ const uploadAvatar = (req, res, next) => {
   });
 };
 
-module.exports = { uploadAvatar };
+/**
+ * Accepts ONE file (an image or a PDF) in the form field "receipt" and puts it on req.file.
+ * Multer's own errors are turned into clean 400 responses.
+ */
+const uploadReceipt = (req, res, next) => {
+  upload.single('receipt')(req, res, (err) => {
+    if (!err) return next();
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return next(ApiError.badRequest(`The file must be at most ${env.upload.maxMb} MB`));
+      }
+      if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+        return next(ApiError.badRequest('Send exactly one file in the form field "receipt"'));
+      }
+      return next(ApiError.badRequest('Invalid upload'));
+    }
+    return next(err);
+  });
+};
+
+module.exports = { uploadAvatar, uploadReceipt };

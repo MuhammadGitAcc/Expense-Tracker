@@ -11,7 +11,7 @@ const env = require('./config/env');
 const logger = require('./config/logger');
 const corsOptions = require('./config/cors');
 const routes = require('./routes');
-const { UPLOAD_ROOT } = require('./services/upload.service');
+const { AVATAR_DIR } = require('./services/upload.service');
 const { apiLimiter } = require('./middlewares/rateLimit.middleware');
 const notFound = require('./middlewares/notFound.middleware');
 const errorMiddleware = require('./middlewares/error.middleware');
@@ -38,13 +38,15 @@ if (!env.isTest) {
   );
 }
 
+// Only avatars are public. Receipts are private and are sent by the API after an
+// ownership check (GET /expenses/:id/receipt), never as static files.
 app.use(
-  '/uploads',
+  '/uploads/avatars',
   (_req, res, next) => {
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     next();
   },
-  express.static(UPLOAD_ROOT, { index: false, dotfiles: 'deny', maxAge: '7d' }),
+  express.static(AVATAR_DIR, { index: false, dotfiles: 'deny', maxAge: '7d' }),
 );
 
 app.use(env.apiPrefix, apiLimiter, routes);
