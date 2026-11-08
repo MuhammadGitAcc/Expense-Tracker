@@ -11,6 +11,7 @@ const env = require('./config/env');
 const logger = require('./config/logger');
 const corsOptions = require('./config/cors');
 const routes = require('./routes');
+const { UPLOAD_ROOT } = require('./services/upload.service');
 const { apiLimiter } = require('./middlewares/rateLimit.middleware');
 const notFound = require('./middlewares/notFound.middleware');
 const errorMiddleware = require('./middlewares/error.middleware');
@@ -36,6 +37,15 @@ if (!env.isTest) {
     }),
   );
 }
+
+app.use(
+  '/uploads',
+  (_req, res, next) => {
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    next();
+  },
+  express.static(UPLOAD_ROOT, { index: false, dotfiles: 'deny', maxAge: '7d' }),
+);
 
 app.use(env.apiPrefix, apiLimiter, routes);
 
