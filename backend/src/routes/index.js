@@ -41,6 +41,8 @@ router.use('/expenses', require('./expense.routes'));
 router.use('/incomes', require('./income.routes'));
 router.use('/budgets', require('./budget.routes'));
 router.use('/recurring', require('./recurring.routes'));
+router.use('/dashboard', require('./dashboard.routes'));
+router.use('/reports', require('./report.routes'));
 
 // Feature routers are mounted here as their phases are built, for example:
 //   router.use('/expenses', require('./expense.routes')); (Phase 4)
