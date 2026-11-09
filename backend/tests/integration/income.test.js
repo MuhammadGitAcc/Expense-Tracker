@@ -463,7 +463,7 @@ describe('GET /incomes (filters, search, sorting, pagination)', () => {
     });
 
     const mine = await listIncomes(token);
-    const theirs = await listIncomes(token === other.token ? '' : other.token);
+    const theirs = await listIncomes(other.token);
 
     expect(mine.body.meta.total).toBe(4);
     expect(amountsOf(theirs)).toEqual(['999.00']);
