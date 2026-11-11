@@ -151,6 +151,33 @@ async function deleteById(id, client = db) {
   return rowCount > 0;
 }
 
+/**
+ * Housekeeping for a scheduled job: delete sign-ups that never confirmed their email.
+ * An account is deleted only when ALL of this is true:
+ *   - the email is still unverified,
+ *   - the account is older than `maxAgeDays`,
+ *   - no verification code was created in the last `maxAgeDays` (a resend or a login attempt
+ *     means the person is still trying, so the account stays),
+ *   - it owns no accounts (wallets). An unverified user cannot log in, so this should always
+ *     be true; it is a safety net so real data can never be deleted by this job.
+ * Related rows (tokens, codes) are removed by the database (ON DELETE CASCADE).
+ * Resolves the number of deleted users.
+ */
+async function deleteStaleUnverified(maxAgeDays, client = db) {
+  const { rowCount } = await client.query(
+    `DELETE FROM users u
+     WHERE NOT u.email_verified
+       AND u.created_at < NOW() - ($1::int * INTERVAL '1 day')
+       AND NOT EXISTS (
+         SELECT 1 FROM email_verification_codes c
+         WHERE c.user_id = u.id AND c.created_at >= NOW() - ($1::int * INTERVAL '1 day')
+       )
+       AND NOT EXISTS (SELECT 1 FROM accounts a WHERE a.user_id = u.id)`,
+    [maxAgeDays],
+  );
+  return rowCount;
+}
+
 module.exports = {
   findById,
   findByEmail,
@@ -163,4 +190,5 @@ module.exports = {
   updatePassword,
   markEmailVerified,
   deleteById,
+  deleteStaleUnverified,
 };
