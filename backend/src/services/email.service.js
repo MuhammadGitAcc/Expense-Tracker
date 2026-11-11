@@ -135,10 +135,42 @@ function sendBudgetAlertEmail({ user, level, budgetName, monthLabel, spent, amou
   });
 }
 
+function sendWeeklySummaryEmail({ user, summary }) {
+  const top = summary.topCategories.length
+    ? `Top spending: ${summary.topCategories
+        .map((c) => `${c.name} ${c.total} ${summary.currency}`)
+        .join(', ')}.`
+    : '';
+  return sendMail({
+    to: user.email,
+    subject: `${APP_NAME}: your week, ${summary.label}`,
+    html: renderTemplate('weeklySummary', {
+      appName: APP_NAME,
+      name: user.name,
+      weekLabel: summary.label,
+      income: summary.income,
+      expense: summary.expense,
+      net: summary.net,
+      currency: summary.currency,
+      topCategories: top,
+      changeText: summary.changeText,
+      appUrl: env.frontendUrl,
+    }),
+    text:
+      `Hi ${user.name},\n\nYour week, ${summary.label}:\n` +
+      `Income: ${summary.income} ${summary.currency}\n` +
+      `Expenses: ${summary.expense} ${summary.currency}\n` +
+      `Net: ${summary.net} ${summary.currency}\n` +
+      `${top ? `${top}\n` : ''}${summary.changeText ? `${summary.changeText}\n` : ''}` +
+      `\nOpen ${APP_NAME}: ${env.frontendUrl}\n`,
+  });
+}
+
 module.exports = {
   sendMail,
   sendWelcomeEmail,
   sendPasswordResetEmail,
   sendVerificationEmail,
   sendBudgetAlertEmail,
+  sendWeeklySummaryEmail,
 };

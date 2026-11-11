@@ -5,7 +5,11 @@ const logger = require('../config/logger');
 
 // Add each job here as it is built (budgetAlerts 5.3, weeklySummary 5.4, cleanup 5.6).
 // ORDER MATTERS: the recurring job runs first, so the budget check sees the expenses it creates.
-const jobs = [require('./recurringTransactions.job'), require('./budgetAlerts.job')];
+const jobs = [
+  require('./recurringTransactions.job'),
+  require('./budgetAlerts.job'),
+  require('./weeklySummary.job'),
+];
 
 let tasks = [];
 
