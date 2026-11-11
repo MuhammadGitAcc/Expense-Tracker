@@ -152,6 +152,76 @@ async function deleteById(id, userId, client = db) {
   return rowCount > 0;
 }
 
+/** Ids of the active templates that are due on or before `asOf` (the daily job's work list). */
+async function findDueIds(asOf, client = db) {
+  const { rows } = await client.query(
+    `SELECT id FROM recurring_transactions
+     WHERE is_active
+       AND next_run_date <= $1::date
+       AND (end_date IS NULL OR next_run_date <= end_date)
+     ORDER BY next_run_date, id`,
+    [asOf],
+  );
+  return rows.map((row) => row.id);
+}
+
+/**
+ * Lock one due template for the job (MUST be called with a transaction client). The same
+ * conditions are checked again after the lock, and a template another run already holds is
+ * skipped, so two runs can never create the same transaction twice. Resolves null when the
+ * template is no longer due or is locked by someone else.
+ */
+async function lockDue(id, asOf, client) {
+  const { rows } = await client.query(
+    `SELECT r.id, r.user_id, r.type, r.amount, r.account_id, r.category_id, r.frequency,
+            r.start_date, r.end_date, r.next_run_date, r.note,
+            a.name AS account_name, a.currency AS account_currency, a.is_archived,
+            c.name AS category_name
+     FROM recurring_transactions r
+     JOIN accounts a ON a.id = r.account_id
+     JOIN categories c ON c.id = r.category_id
+     WHERE r.id = $1
+       AND r.is_active
+       AND r.next_run_date <= $2::date
+       AND (r.end_date IS NULL OR r.next_run_date <= r.end_date)
+     FOR UPDATE OF r SKIP LOCKED`,
+    [id, asOf],
+  );
+  const row = rows[0];
+  return (
+    row && {
+      id: row.id,
+      userId: row.user_id,
+      type: row.type,
+      amount: row.amount,
+      accountId: row.account_id,
+      categoryId: row.category_id,
+      frequency: row.frequency,
+      startDate: row.start_date,
+      endDate: row.end_date,
+      nextRunDate: row.next_run_date,
+      note: row.note,
+      accountName: row.account_name,
+      currency: row.account_currency,
+      accountArchived: row.is_archived,
+      categoryName: row.category_name,
+    }
+  );
+}
+
+/** Store the new next run date after a run; isActive false ends the schedule. */
+async function advance(id, nextRunDate, isActive, client = db) {
+  await client.query(
+    'UPDATE recurring_transactions SET next_run_date = $2::date, is_active = $3 WHERE id = $1',
+    [id, nextRunDate, isActive],
+  );
+}
+
+/** Pause a template without touching its dates (the job does this for archived accounts). */
+async function pause(id, client = db) {
+  await client.query('UPDATE recurring_transactions SET is_active = FALSE WHERE id = $1', [id]);
+}
+
 module.exports = {
   list,
   findById,
@@ -159,4 +229,8 @@ module.exports = {
   update,
   setActive,
   deleteById,
+  findDueIds,
+  lockDue,
+  advance,
+  pause,
 };

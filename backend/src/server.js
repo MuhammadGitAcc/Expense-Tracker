@@ -4,6 +4,7 @@ const env = require('./config/env');
 const logger = require('./config/logger');
 const db = require('./config/db');
 const app = require('./app');
+const { startJobs, stopJobs } = require('./jobs');
 
 async function start() {
   // Fail fast: do not accept traffic if the database is unreachable.
@@ -20,6 +21,8 @@ async function start() {
     logger.info(`API listening on http://localhost:${env.port}${env.apiPrefix} (${env.nodeEnv})`);
   });
 
+  startJobs();
+
   let shuttingDown = false;
   async function shutdown(signal) {
     if (shuttingDown) return;
@@ -28,6 +31,7 @@ async function start() {
     // Safety net: force exit if connections do not drain in time.
     setTimeout(() => process.exit(1), 10000).unref();
     server.close(async () => {
+      await stopJobs().catch(() => {});
       await db.close().catch(() => {});
       logger.info('Shutdown complete');
       process.exit(0);

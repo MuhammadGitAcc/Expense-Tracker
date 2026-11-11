@@ -129,14 +129,24 @@ async function lockById(id, userId, client) {
 
 /** Insert the income. Resolves the new id (callers read the full row with findById). */
 async function create(
-  { userId, accountId, categoryId, amount, date = null, source = null, note = null },
+  {
+    userId,
+    accountId,
+    categoryId,
+    amount,
+    date = null,
+    source = null,
+    note = null,
+    recurringId = null,
+  },
   client = db,
 ) {
   const { rows } = await client.query(
-    `INSERT INTO incomes (user_id, account_id, category_id, amount, date, source, note)
-     VALUES ($1, $2, $3, $4::numeric, COALESCE($5::date, CURRENT_DATE), $6, $7)
+    `INSERT INTO incomes
+       (user_id, account_id, category_id, amount, date, source, note, recurring_id)
+     VALUES ($1, $2, $3, $4::numeric, COALESCE($5::date, CURRENT_DATE), $6, $7, $8)
      RETURNING id`,
-    [userId, accountId, categoryId, amount, date, source, note],
+    [userId, accountId, categoryId, amount, date, source, note, recurringId],
   );
   return rows[0].id;
 }
