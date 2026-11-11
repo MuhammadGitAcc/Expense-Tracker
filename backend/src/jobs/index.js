@@ -9,6 +9,7 @@ const jobs = [
   require('./recurringTransactions.job'),
   require('./budgetAlerts.job'),
   require('./weeklySummary.job'),
+  require('./cleanup.job'),
 ];
 
 let tasks = [];
