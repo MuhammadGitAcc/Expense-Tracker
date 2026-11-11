@@ -4,7 +4,8 @@ const cron = require('node-cron');
 const logger = require('../config/logger');
 
 // Add each job here as it is built (budgetAlerts 5.3, weeklySummary 5.4, cleanup 5.6).
-const jobs = [require('./recurringTransactions.job')];
+// ORDER MATTERS: the recurring job runs first, so the budget check sees the expenses it creates.
+const jobs = [require('./recurringTransactions.job'), require('./budgetAlerts.job')];
 
 let tasks = [];
 
@@ -23,7 +24,12 @@ function startJobs() {
     logger.info(`Job scheduled: ${job.name} (${job.schedule} UTC)`);
     return task;
   });
-  jobs.forEach((job) => job.run());
+  // One after another (not at the same time) because of the order explained above.
+  (async () => {
+    for (const job of jobs) {
+      await job.run();
+    }
+  })();
 }
 
 async function stopJobs() {

@@ -133,10 +133,46 @@ async function deleteById(id, userId, client = db) {
   return rowCount > 0;
 }
 
+/** The alert level already sent for each budget of one month, as a Map of budget id -> level. */
+async function getAlertLevels(userId, { month, year }, client = db) {
+  const { rows } = await client.query(
+    'SELECT id, last_alert_level FROM budgets WHERE user_id = $1 AND month = $2 AND year = $3',
+    [userId, month, year],
+  );
+  return new Map(rows.map((row) => [row.id, row.last_alert_level]));
+}
+
+/**
+ * Change the stored alert level from `from` to `to` (each 'warning', 'exceeded' or null).
+ * It only succeeds while the stored level is still `from`, so when two requests react to the
+ * same change at the same moment, exactly one of them wins and sends the notification.
+ * Resolves true when this call changed the level.
+ */
+async function setAlertLevel(id, userId, from, to, client = db) {
+  const { rowCount } = await client.query(
+    `UPDATE budgets SET last_alert_level = $3::varchar
+     WHERE id = $1 AND user_id = $2 AND last_alert_level IS NOT DISTINCT FROM $4::varchar`,
+    [id, userId, to, from],
+  );
+  return rowCount > 0;
+}
+
+/** Ids of the users that have at least one budget in the month (the daily check's work list). */
+async function listUserIdsWithBudgets({ month, year }, client = db) {
+  const { rows } = await client.query(
+    'SELECT DISTINCT user_id FROM budgets WHERE month = $1 AND year = $2',
+    [month, year],
+  );
+  return rows.map((row) => row.user_id);
+}
+
 module.exports = {
   list,
   findById,
   create,
   update,
   deleteById,
+  getAlertLevels,
+  setAlertLevel,
+  listUserIdsWithBudgets,
 };

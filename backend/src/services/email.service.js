@@ -113,4 +113,32 @@ function sendVerificationEmail({ user, code, expiresInMinutes }) {
   });
 }
 
-module.exports = { sendMail, sendWelcomeEmail, sendPasswordResetEmail, sendVerificationEmail };
+function sendBudgetAlertEmail({ user, level, budgetName, monthLabel, spent, amount, percentUsed }) {
+  const exceeded = level === 'exceeded';
+  const heading = exceeded
+    ? `You went over your ${budgetName} budget`
+    : `Budget alert: ${budgetName}`;
+  const summary = exceeded
+    ? `You have spent ${spent} of your ${amount} ${budgetName} budget for ${monthLabel}.`
+    : `You have used ${percentUsed}% of your ${budgetName} budget for ${monthLabel} (${spent} of ${amount}).`;
+  return sendMail({
+    to: user.email,
+    subject: `${APP_NAME}: ${heading}`,
+    html: renderTemplate('budgetAlert', {
+      appName: APP_NAME,
+      name: user.name,
+      heading,
+      summary,
+      appUrl: env.frontendUrl,
+    }),
+    text: `Hi ${user.name},\n\n${summary}\n\nOpen ${APP_NAME}: ${env.frontendUrl}\n`,
+  });
+}
+
+module.exports = {
+  sendMail,
+  sendWelcomeEmail,
+  sendPasswordResetEmail,
+  sendVerificationEmail,
+  sendBudgetAlertEmail,
+};
