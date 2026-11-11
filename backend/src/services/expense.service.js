@@ -7,6 +7,7 @@ const expenseRepository = require('../repositories/expense.repository');
 const accountRepository = require('../repositories/account.repository');
 const categoryRepository = require('../repositories/category.repository');
 const uploadService = require('./upload.service');
+const budgetAlertService = require('./budgetAlert.service');
 
 /** The category must be a default or the user's own, and an EXPENSE category. */
 async function assertExpenseCategory(userId, categoryId, client) {
@@ -170,11 +171,23 @@ async function getReceiptPath(userId, id) {
   return fullPath;
 }
 
+/**
+ * After an expense is added or changed, look at the budgets of its month (alerts, see
+ * budgetAlert.service). This never throws, so the expense answer is never affected.
+ */
+const withBudgetCheck =
+  (action) =>
+  async (userId, ...args) => {
+    const result = await action(userId, ...args);
+    await budgetAlertService.checkAfterChange(userId, result.expense.date);
+    return result;
+  };
+
 module.exports = {
   list,
   getById,
-  create,
-  update,
+  create: withBudgetCheck(create),
+  update: withBudgetCheck(update),
   remove,
   attachReceipt,
   removeReceipt,

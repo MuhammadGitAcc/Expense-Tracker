@@ -5,6 +5,7 @@ jest.mock('../../src/repositories/expense.repository');
 jest.mock('../../src/repositories/account.repository');
 jest.mock('../../src/repositories/category.repository');
 jest.mock('../../src/services/upload.service');
+jest.mock('../../src/services/budgetAlert.service');
 
 const db = require('../../src/config/db');
 const expenseRepository = require('../../src/repositories/expense.repository');

@@ -2,6 +2,7 @@
 
 jest.mock('../../src/repositories/budget.repository');
 jest.mock('../../src/repositories/category.repository');
+jest.mock('../../src/services/budgetAlert.service');
 
 const budgetRepository = require('../../src/repositories/budget.repository');
 const categoryRepository = require('../../src/repositories/category.repository');

@@ -4,6 +4,7 @@ const ApiError = require('../utils/ApiError');
 const { today } = require('../utils/dateHelpers');
 const budgetRepository = require('../repositories/budget.repository');
 const categoryRepository = require('../repositories/category.repository');
+const budgetAlertService = require('./budgetAlert.service');
 
 /** The category must be a default or the user's own, and an EXPENSE category. */
 async function assertExpenseCategory(userId, categoryId) {
@@ -43,14 +44,18 @@ async function create(userId, input) {
     }
     throw err;
   }
-  return budgetRepository.findById(id, userId);
+  const budget = await budgetRepository.findById(id, userId);
+  await budgetAlertService.checkUserMonth(userId, budget); // already over the limit? tell the user
+  return budget;
 }
 
 /** Change the limit and/or the alert level. Spent is recalculated on every read. */
 async function update(userId, id, fields) {
   const found = await budgetRepository.update(id, userId, fields);
   if (!found) throw ApiError.notFound('Budget not found');
-  return budgetRepository.findById(id, userId);
+  const budget = await budgetRepository.findById(id, userId);
+  await budgetAlertService.checkUserMonth(userId, budget);
+  return budget;
 }
 
 async function remove(userId, id) {
