@@ -19,6 +19,8 @@ const corsOptions = {
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
+  // Lets the frontend read the file name of a download (exports).
+  exposedHeaders: ['Content-Disposition'],
   maxAge: 600,
 };
 

@@ -25,4 +25,13 @@ const authLimiter = rateLimit({
   handler,
 });
 
-module.exports = { apiLimiter, authLimiter };
+/** Exports are heavy: a tenth of the normal API limit (30 per 15 minutes by default). */
+const exportLimiter = rateLimit({
+  windowMs: env.rateLimit.windowMs,
+  limit: Math.max(1, Math.floor(env.rateLimit.max / 10)),
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  handler,
+});
+
+module.exports = { apiLimiter, authLimiter, exportLimiter };
