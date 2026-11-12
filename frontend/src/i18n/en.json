@@ -7,7 +7,11 @@
     "tryAgain": "Try again",
     "search": "Search",
     "clear": "Clear search",
-    "language": "Language"
+    "language": "Language",
+    "add": "Add",
+    "edit": "Edit",
+    "delete": "Delete",
+    "save": "Save"
   },
   "theme": {
     "switchToDark": "Switch to dark mode",
@@ -25,7 +29,8 @@
     "goLogin": "Go to login",
     "goHome": "Go home",
     "serverTitle": "Server error",
-    "serverText": "Something went wrong on our side. Please try again in a moment."
+    "serverText": "Something went wrong on our side. Please try again in a moment.",
+    "loadFailed": "The data could not be loaded. Check your connection and try again."
   },
   "pagination": {
     "label": "Pagination",
@@ -126,5 +131,33 @@
     "invalidLinkTitle": "This link is not valid",
     "invalidLinkText": "The reset link is missing or incomplete.",
     "requestNewLink": "Request a new link"
+  },
+  "categories": {
+    "title": "Categories",
+    "subtitle": "Organize your income and expenses.",
+    "add": "Add category",
+    "edit": "Edit category",
+    "types": {
+      "expense": "Expense",
+      "income": "Income"
+    },
+    "name": "Name",
+    "type": "Type",
+    "typeLocked": "The type cannot be changed after the category is created.",
+    "icon": "Icon",
+    "color": "Color",
+    "customColor": "Pick a custom color",
+    "preview": "Preview",
+    "yours": "Your categories",
+    "defaults": "Default categories",
+    "default": "Default",
+    "emptyTitle": "No custom categories yet",
+    "emptyText": "Create your own categories for the things you track. The default ones are always available.",
+    "actionsFor": "Actions for {{name}}",
+    "created": "Category created",
+    "updated": "Category updated",
+    "deleted": "Category deleted",
+    "deleteTitle": "Delete category?",
+    "deleteText": "\"{{name}}\" will be deleted. A category that is used by transactions cannot be deleted."
   }
 }
