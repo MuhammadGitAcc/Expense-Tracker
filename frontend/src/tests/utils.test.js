@@ -149,7 +149,7 @@ describe('validators', () => {
 describe('useToast', () => {
   afterEach(() => {
     vi.useRealTimers();
-    toast.clear();
+    act(() => toast.clear());
   });
 
   it('adds a toast and removes it after its time', () => {
