@@ -3,7 +3,28 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <script>
+      // Runs before the first paint: applies the saved theme and text direction (no flash).
+      // The values are stored as JSON by the app (et.theme = "dark", et.language = "ar").
+      (function () {
+        try {
+          var theme = JSON.parse(localStorage.getItem('et.theme'));
+          var dark =
+            theme === 'dark' ||
+            (theme !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark) document.documentElement.classList.add('dark');
+
+          var language = JSON.parse(localStorage.getItem('et.language'));
+          if (language === 'ar') {
+            document.documentElement.lang = 'ar';
+            document.documentElement.dir = 'rtl';
+          }
+        } catch (error) {
+          // storage blocked or unreadable: keep the defaults
+        }
+      })();
+    </script>
     <meta name="theme-color" content="#0f172a" />
     <meta name="description" content="Track your expenses, income and budgets in one place." />
     <title>Expense Tracker</title>

@@ -1,0 +1,56 @@
+{
+  "common": {
+    "loading": "جارٍ التحميل…",
+    "close": "إغلاق",
+    "cancel": "إلغاء",
+    "confirm": "تأكيد",
+    "tryAgain": "حاول مرة أخرى",
+    "search": "بحث",
+    "clear": "مسح البحث"
+  },
+  "theme": {
+    "switchToDark": "التبديل إلى الوضع الداكن",
+    "switchToLight": "التبديل إلى الوضع الفاتح"
+  },
+  "errors": {
+    "somethingWrong": "حدث خطأ ما",
+    "somethingWrongText": "تعذّر عرض هذه الصفحة. حاول مرة أخرى، وإذا استمرت المشكلة فأعد تحميل الصفحة.",
+    "reload": "إعادة تحميل الصفحة"
+  },
+  "pagination": {
+    "label": "ترقيم الصفحات",
+    "previous": "السابق",
+    "next": "التالي",
+    "perPage": "لكل صفحة",
+    "goToPage": "الانتقال إلى الصفحة {{page}}",
+    "pageOf": "الصفحة {{page}} من {{totalPages}}",
+    "showing": "عرض {{from}}–{{to}} من {{total}}"
+  },
+  "upload": {
+    "dropOrBrowse": "انقر لاختيار ملف أو أفلته هنا",
+    "hint": "{{types}}، حتى {{max}} ميغابايت",
+    "remove": "إزالة الملف",
+    "invalidType": "نوع الملف غير مسموح. المسموح: {{types}}.",
+    "tooLarge": "الملف كبير جدًا (الحد الأقصى {{max}} ميغابايت)."
+  },
+  "validation": {
+    "required": "هذا الحقل مطلوب",
+    "emailInvalid": "أدخل بريدًا إلكترونيًا صالحًا",
+    "nameMin": "يجب ألا يقل الاسم عن حرفين",
+    "nameMax": "يجب ألا يزيد الاسم عن 100 حرف",
+    "passwordMin": "استخدم 8 أحرف على الأقل",
+    "passwordLower": "أضف حرفًا صغيرًا",
+    "passwordUpper": "أضف حرفًا كبيرًا",
+    "passwordDigit": "أضف رقمًا",
+    "passwordSpecial": "أضف رمزًا خاصًا",
+    "passwordMax": "كلمة المرور طويلة جدًا (72 بايت كحد أقصى)",
+    "passwordsMismatch": "كلمتا المرور غير متطابقتين",
+    "amountFormat": "أدخل مبلغًا بخانتين عشريتين كحد أقصى، مثل 12.50",
+    "amountPositive": "يجب أن يكون المبلغ أكبر من صفر",
+    "dateInvalid": "أدخل تاريخًا صالحًا",
+    "currencyInvalid": "اختر عملة صالحة",
+    "codeFormat": "يتكون الرمز من 6 أرقام",
+    "colorInvalid": "اختر لونًا صالحًا",
+    "tooLong": "النص طويل جدًا"
+  }
+}
