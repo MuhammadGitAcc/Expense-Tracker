@@ -8,7 +8,13 @@ const ApiError = require('../utils/ApiError');
 // only after their content has been checked.
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: env.upload.maxMb * 1024 * 1024, files: 1 },
+  limits: {
+    fileSize: env.upload.maxMb * 1024 * 1024,
+    files: 1,
+    fields: 5,
+    fieldSize: 10 * 1024,
+    parts: 6,
+  },
 });
 
 /**

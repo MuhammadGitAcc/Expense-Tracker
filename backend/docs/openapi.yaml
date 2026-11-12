@@ -1,0 +1,2360 @@
+openapi: 3.0.3
+
+info:
+  title: Expense Tracker API
+  version: 1.0.0
+  description: |
+    REST API of the Expense Tracker application.
+
+    ## How to try it from this page
+    1. Call **POST /auth/login** (or register and verify the email code first).
+    2. Copy `data.accessToken` from the answer.
+    3. Click **Authorize** (top right) and paste the token (without the word "Bearer").
+    4. Every endpoint with a lock icon can now be tested with **Try it out**.
+
+    The access token lives 15 minutes. When it expires, log in again or call **POST /auth/refresh**.
+
+    ## Conventions
+
+    **Response envelope.** Every answer, errors included, has the same shape:
+    `{ "success": true, "message": "...", "data": {...} | null, "meta": {...} | null }`.
+    Errors have `success: false`, `data: null` and, for validation errors, an `errors` array.
+    One error has a machine-readable `code` field: `EMAIL_NOT_VERIFIED` (login with an
+    unverified email, HTTP 403).
+
+    **Money is a string.** Amounts are strings with exactly 2 decimals (`"12.50"`, `"-49.90"`),
+    summed in PostgreSQL, never floats. Requests accept a string or a number with at most
+    2 decimals and up to 10 digits before the point. Amounts are never converted between
+    currencies: every total is for ONE currency (the `currency` query parameter, otherwise
+    the profile currency).
+
+    **Dates.** Calendar days are `YYYY-MM-DD` strings (UTC days). Timestamps are ISO 8601.
+
+    **Pagination.** List endpoints accept `page` (default 1) and `limit` (default 20, max 100)
+    and answer `meta: { total, page, limit, totalPages, hasNext, hasPrev }`.
+
+    **Authentication.** Access token: `Authorization: Bearer <token>` (15 minutes). Refresh
+    token: an httpOnly cookie named `refreshToken`, scoped to `/api/v1/auth`, single use
+    (rotated on every refresh). Browsers must send requests with credentials for the cookie
+    to be used. Calling the API from another origin requires that origin in `CORS_ORIGIN`.
+
+    **Rate limits.** 300 requests per 15 minutes per IP for the whole API (the health check is
+    exempt). Authentication endpoints share a stricter counter of 10 per 15 minutes. Exports
+    allow a tenth of the normal limit. Exceeding a limit answers 429. Counters are kept in
+    memory: they reset when the server restarts.
+
+    **Unknown fields.** Create and update bodies are strict: an unknown field (for example
+    `userId` or `role`) is rejected with 400, not ignored.
+  license:
+    name: MIT
+
+servers:
+  - url: /api/v1
+    description: This server
+
+tags:
+  - name: Health
+  - name: Auth
+    description: Register, verify email, login, tokens and password reset.
+  - name: Users
+    description: The logged-in user's profile.
+  - name: Categories
+  - name: Accounts
+    description: Wallets and transfers between them.
+  - name: Expenses
+  - name: Incomes
+  - name: Budgets
+  - name: Recurring
+    description: Templates only. A daily job creates the real transactions.
+  - name: Dashboard
+  - name: Reports
+  - name: Notifications
+  - name: Exports
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ------------------------------------------------------------------ Health
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      description: 200 when the API and the database are up, 503 when the database cannot be reached. Never rate limited.
+      security: []
+      responses:
+        '200':
+          description: API and database are up
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Database unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  # -------------------------------------------------------------------- Auth
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Create an account
+      description: |
+        Creates the account and emails a 6-digit code (valid 10 minutes). No token and no cookie
+        are returned: the code must be confirmed with `POST /auth/verify-email`. Registering again
+        with an email whose account is still unverified takes that account over (new name,
+        password and code). A verified email answers 409. Counts against the auth rate limit.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Account created, code sent
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          email: { type: string, format: email }
+                          expiresInMinutes: { type: integer, example: 10 }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/verify-email:
+    post:
+      tags: [Auth]
+      summary: Confirm the emailed code
+      description: |
+        Verifies the email, sends the welcome email and logs the user in (access token in the body,
+        refresh token in the cookie). The code is single use; 5 wrong attempts cancel it. An
+        unknown email, an expired, used or cancelled code all answer the same 400 message.
+        Counts against the auth rate limit.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, code]
+              properties:
+                email: { type: string, format: email }
+                code: { type: string, pattern: '^\d{6}$', example: '123456' }
+      responses:
+        '200': { $ref: '#/components/responses/AuthSuccess' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/resend-verification:
+    post:
+      tags: [Auth]
+      summary: Send a new verification code
+      description: |
+        Always answers 200 with the same message (it silently does nothing for an unknown or
+        already verified email, or inside the 60 second cooldown). A new code cancels older ones.
+        Counts against the auth rate limit.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '200': { $ref: '#/components/responses/MessageOnly' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in
+      description: |
+        Answers with the user and an access token and sets the `refreshToken` cookie.
+        A wrong email or password answers 401. A correct password on an unverified account
+        answers 403 with `code: "EMAIL_NOT_VERIFIED"` and sends a new code (cooldown applies).
+        Counts against the auth rate limit.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, maxLength: 200 }
+      responses:
+        '200': { $ref: '#/components/responses/AuthSuccess' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: The email is not verified yet (`code` is `EMAIL_NOT_VERIFIED`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: Please verify your email address first
+                data: null
+                meta: null
+                code: EMAIL_NOT_VERIFIED
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Get a new access token
+      description: |
+        Reads the `refreshToken` cookie (send the request with credentials), answers with a new
+        access token and sets a NEW cookie: refresh tokens are single use. Presenting an already
+        used token revokes all of that user's tokens (possible theft). A failed refresh clears the cookie.
+        In this page the browser sends the cookie only if it was set for this origin.
+      security: []
+      parameters:
+        - in: cookie
+          name: refreshToken
+          schema: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/AuthSuccess' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Log out
+      description: Revokes the refresh token and clears the cookie. Always answers 200.
+      security: []
+      responses:
+        '200': { $ref: '#/components/responses/MessageOnly' }
+
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Request a password reset link
+      description: |
+        Always answers 200 with the same message, whether the email exists or not. The link
+        (`FRONTEND_URL/reset-password?token=...`) is valid 30 minutes and works once; a new request
+        cancels older links. Counts against the auth rate limit.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '200': { $ref: '#/components/responses/MessageOnly' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Set a new password with a reset token
+      description: |
+        Logs the user out on every device and also marks the email as verified.
+        Counts against the auth rate limit.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token: { type: string, minLength: 20, maxLength: 200 }
+                password: { $ref: '#/components/schemas/Password' }
+      responses:
+        '200': { $ref: '#/components/responses/MessageOnly' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  # ------------------------------------------------------------------- Users
+  /users/me:
+    get:
+      tags: [Users]
+      summary: Get my profile
+      responses:
+        '200': { $ref: '#/components/responses/UserOnly' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    put:
+      tags: [Users]
+      summary: Update my profile
+      description: Send only the fields to change, at least one. `role` and `email` cannot be changed here.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                name: { type: string, minLength: 2, maxLength: 100 }
+                currency: { $ref: '#/components/schemas/CurrencyCode' }
+                language: { type: string, enum: [en, ar] }
+                theme: { type: string, enum: [light, dark, system] }
+      responses:
+        '200': { $ref: '#/components/responses/UserOnly' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    delete:
+      tags: [Users]
+      summary: Delete my account
+      description: |
+        Deletes the account and all its data (and avatar and receipt files). The password confirms
+        the owner. A wrong password answers 400 (not 401). Counts against the auth rate limit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string, maxLength: 200 }
+      responses:
+        '200': { $ref: '#/components/responses/MessageOnly' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /users/me/password:
+    put:
+      tags: [Users]
+      summary: Change my password
+      description: |
+        Logs the user out on every device. A wrong current password answers 400 (not 401).
+        Counts against the auth rate limit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword: { type: string, maxLength: 200 }
+                newPassword: { $ref: '#/components/schemas/Password' }
+      responses:
+        '200': { $ref: '#/components/responses/MessageOnly' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /users/me/avatar:
+    post:
+      tags: [Users]
+      summary: Upload my avatar
+      description: |
+        One image in the form field `avatar`: JPEG, PNG or WebP, at most `MAX_UPLOAD_MB` (5 MB by default).
+        The real bytes are checked; the client's file name and Content-Type are never trusted.
+        Avatars are public: `avatarUrl` is a path such as `/uploads/avatars/<file>` on the API origin
+        (not under /api/v1).
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [avatar]
+              properties:
+                avatar: { type: string, format: binary }
+      responses:
+        '200': { $ref: '#/components/responses/UserOnly' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # -------------------------------------------------------------- Categories
+  /categories:
+    get:
+      tags: [Categories]
+      summary: List categories
+      description: The default categories plus the user's own, ordered by type, defaults first, then name. Not paginated.
+      parameters:
+        - in: query
+          name: type
+          schema: { $ref: '#/components/schemas/CategoryType' }
+      responses:
+        '200':
+          description: Categories
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          categories:
+                            type: array
+                            items: { $ref: '#/components/schemas/Category' }
+                      meta:
+                        type: object
+                        properties:
+                          total: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Categories]
+      summary: Create a custom category
+      description: The name must be unique per type (ignoring case), also against the default names (409).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, type]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 60 }
+                type: { $ref: '#/components/schemas/CategoryType' }
+                icon:
+                  { type: string, maxLength: 50, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$', default: tag }
+                color: { $ref: '#/components/schemas/Color' }
+      responses:
+        '201': { $ref: '#/components/responses/CategoryCreated' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /categories/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    get:
+      tags: [Categories]
+      summary: Get a category
+      description: A default category or one of the user's own. Anyone else's category answers 404.
+      responses:
+        '200': { $ref: '#/components/responses/CategoryOne' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Categories]
+      summary: Update a custom category
+      description: Changes name, icon and color only (never the type). Default categories are read-only (403).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                name: { type: string, minLength: 1, maxLength: 60 }
+                icon: { type: string, maxLength: 50 }
+                color: { $ref: '#/components/schemas/Color' }
+      responses:
+        '200': { $ref: '#/components/responses/CategoryOne' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [Categories]
+      summary: Delete a custom category
+      description: |
+        Blocked with 409 while expenses, incomes or recurring templates use it. Budgets of the
+        category are deleted with it. Default categories answer 403.
+      responses:
+        '200': { $ref: '#/components/responses/MessageOnly' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  # ---------------------------------------------------------------- Accounts
+  /accounts:
+    get:
+      tags: [Accounts]
+      summary: List accounts
+      description: |
+        Archived accounts are hidden unless `includeArchived=true`. Not paginated.
+        `meta.totalsByCurrency` holds the exact sum of balances per currency.
+      parameters:
+        - in: query
+          name: includeArchived
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Accounts
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          accounts:
+                            type: array
+                            items: { $ref: '#/components/schemas/Account' }
+                      meta:
+                        type: object
+                        properties:
+                          total: { type: integer }
+                          totalsByCurrency:
+                            type: object
+                            additionalProperties: { $ref: '#/components/schemas/Money' }
+                            example: { USD: '150.50' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Accounts]
+      summary: Create an account
+      description: The opening `balance` may be negative. `currency` defaults to the profile currency and can never change later.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 100 }
+                type: { $ref: '#/components/schemas/AccountType' }
+                balance: { $ref: '#/components/schemas/MoneyInput' }
+                currency: { $ref: '#/components/schemas/CurrencyCode' }
+                color: { $ref: '#/components/schemas/Color' }
+      responses:
+        '201': { $ref: '#/components/responses/AccountCreated' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /accounts/transfers:
+    get:
+      tags: [Accounts]
+      summary: List transfers
+      description: Newest first.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: One page of transfers
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          transfers:
+                            type: array
+                            items: { $ref: '#/components/schemas/Transfer' }
+                      meta: { $ref: '#/components/schemas/PaginationMeta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Accounts]
+      summary: Transfer money between two accounts
+      description: |
+        Both accounts must be the user's own, not archived, and have the SAME currency. Debit and
+        credit happen in one database transaction. There is no overdraft check.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [fromAccountId, toAccountId, amount]
+              properties:
+                fromAccountId: { type: string, format: uuid }
+                toAccountId: { type: string, format: uuid }
+                amount: { $ref: '#/components/schemas/MoneyInput' }
+                date: { $ref: '#/components/schemas/IsoDate' }
+                note: { type: string, maxLength: 500 }
+      responses:
+        '201':
+          description: Transfer completed
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          transfer: { $ref: '#/components/schemas/Transfer' }
+                          accounts:
+                            type: object
+                            properties:
+                              from: { $ref: '#/components/schemas/Account' }
+                              to: { $ref: '#/components/schemas/Account' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /accounts/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    get:
+      tags: [Accounts]
+      summary: Get an account
+      responses:
+        '200': { $ref: '#/components/responses/AccountOne' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Accounts]
+      summary: Update an account
+      description: Changes name, type and color only. Balances change only through transactions and transfers; the currency never changes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                name: { type: string, minLength: 1, maxLength: 100 }
+                type: { $ref: '#/components/schemas/AccountType' }
+                color: { $ref: '#/components/schemas/Color' }
+      responses:
+        '200': { $ref: '#/components/responses/AccountOne' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Accounts]
+      summary: Delete an account
+      description: Blocked with 409 when expenses, incomes, recurring templates or transfers exist. Archive it instead.
+      responses:
+        '200': { $ref: '#/components/responses/MessageOnly' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /accounts/{id}/archive:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    post:
+      tags: [Accounts]
+      summary: Archive an account
+      responses:
+        '200': { $ref: '#/components/responses/AccountOne' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /accounts/{id}/unarchive:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    post:
+      tags: [Accounts]
+      summary: Restore an archived account
+      responses:
+        '200': { $ref: '#/components/responses/AccountOne' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  #---------------------------------------------------------------- Expenses
+  /expenses:
+    get:
+      tags: [Expenses]
+      summary: List expenses
+      description: |
+        Filters, search and sorting. `meta` has the pagination fields plus `totalAmount`, the exact
+        sum of the WHOLE filtered set (not only this page).
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/To'
+        - $ref: '#/components/parameters/CategoryIdQuery'
+        - $ref: '#/components/parameters/AccountIdQuery'
+        - $ref: '#/components/parameters/MinAmount'
+        - $ref: '#/components/parameters/MaxAmount'
+        - $ref: '#/components/parameters/Tag'
+        - $ref: '#/components/parameters/PaymentMethod'
+        - $ref: '#/components/parameters/SortBy'
+        - $ref: '#/components/parameters/SortOrder'
+      responses:
+        '200':
+          description: One page of expenses
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          expenses:
+                            type: array
+                            items: { $ref: '#/components/schemas/Expense' }
+                      meta:
+                        allOf:
+                          - $ref: '#/components/schemas/PaginationMeta'
+                          - type: object
+                            properties:
+                              totalAmount: { $ref: '#/components/schemas/Money' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Expenses]
+      summary: Add an expense
+      description: |
+        The account must be the user's own and not archived; the category must be a default or own
+        category of type `expense` (an income category answers 400). The expense is inserted and the
+        account debited in one transaction. Checks the budgets afterwards and may create a budget
+        notification. The answer includes the new balance of the touched account.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [accountId, categoryId, amount]
+              properties:
+                accountId: { type: string, format: uuid }
+                categoryId: { type: string, format: uuid }
+                amount: { $ref: '#/components/schemas/MoneyInput' }
+                date: { $ref: '#/components/schemas/IsoDate' }
+                note: { type: string, maxLength: 1000, nullable: true }
+                paymentMethod: { $ref: '#/components/schemas/PaymentMethod' }
+                tags: { $ref: '#/components/schemas/Tags' }
+      responses:
+        '201':
+          description: Expense added
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExpenseWithAccounts' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /expenses/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    get:
+      tags: [Expenses]
+      summary: Get an expense
+      responses:
+        '200':
+          description: The expense
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          expense: { $ref: '#/components/schemas/Expense' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Expenses]
+      summary: Update an expense
+      description: |
+        Partial update, at least one field. A change of amount or account credits the old account
+        and debits the new one; other fields touch no balance. Moving INTO an archived account is
+        refused. `note: null` clears the note.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                accountId: { type: string, format: uuid }
+                categoryId: { type: string, format: uuid }
+                amount: { $ref: '#/components/schemas/MoneyInput' }
+                date: { $ref: '#/components/schemas/IsoDate' }
+                note: { type: string, maxLength: 1000, nullable: true }
+                paymentMethod: { $ref: '#/components/schemas/PaymentMethod' }
+                tags: { $ref: '#/components/schemas/Tags' }
+      responses:
+        '200':
+          description: Expense updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExpenseWithAccounts' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Expenses]
+      summary: Delete an expense
+      description: Credits the amount back to the account and deletes the receipt file. Answers the new balances.
+      responses:
+        '200':
+          description: Expense deleted
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          accounts:
+                            type: array
+                            items: { $ref: '#/components/schemas/Account' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /expenses/{id}/receipt:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    get:
+      tags: [Expenses]
+      summary: Download the receipt
+      description: |
+        Binary response (JPEG, PNG, WebP or PDF), sent only to the owner with
+        `Cache-Control: private, no-store`. Receipts are PRIVATE and are never static files: load
+        them with the API client (Authorization header) as a blob, not with a plain `<img src>`.
+      responses:
+        '200':
+          description: The receipt file
+          content:
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+            application/pdf: { schema: { type: string, format: binary } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Expenses]
+      summary: Upload or replace the receipt
+      description: |
+        One file in the form field `receipt`: JPEG, PNG, WebP or PDF, at most `MAX_UPLOAD_MB`
+        (5 MB by default). The real bytes are checked. A replaced receipt deletes the old file.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [receipt]
+              properties:
+                receipt: { type: string, format: binary }
+      responses:
+        '200':
+          description: Receipt saved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          expense: { $ref: '#/components/schemas/Expense' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Expenses]
+      summary: Remove the receipt
+      responses:
+        '200':
+          description: Receipt removed
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          expense: { $ref: '#/components/schemas/Expense' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ----------------------------------------------------------------- Incomes
+  /incomes:
+    get:
+      tags: [Incomes]
+      summary: List incomes
+      description: Same filters as expenses (without tags and payment method). `meta.totalAmount` is the exact sum of the whole filtered set.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/To'
+        - $ref: '#/components/parameters/CategoryIdQuery'
+        - $ref: '#/components/parameters/AccountIdQuery'
+        - $ref: '#/components/parameters/MinAmount'
+        - $ref: '#/components/parameters/MaxAmount'
+        - $ref: '#/components/parameters/SortBy'
+        - $ref: '#/components/parameters/SortOrder'
+      responses:
+        '200':
+          description: One page of incomes
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          incomes:
+                            type: array
+                            items: { $ref: '#/components/schemas/Income' }
+                      meta:
+                        allOf:
+                          - $ref: '#/components/schemas/PaginationMeta'
+                          - type: object
+                            properties:
+                              totalAmount: { $ref: '#/components/schemas/Money' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Incomes]
+      summary: Add an income
+      description: The category must be an `income` category (an expense category answers 400). The account is credited in the same transaction. The answer includes the new balance.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [accountId, categoryId, amount]
+              properties:
+                accountId: { type: string, format: uuid }
+                categoryId: { type: string, format: uuid }
+                amount: { $ref: '#/components/schemas/MoneyInput' }
+                date: { $ref: '#/components/schemas/IsoDate' }
+                source: { type: string, maxLength: 150, nullable: true }
+                note: { type: string, maxLength: 1000, nullable: true }
+      responses:
+        '201':
+          description: Income added
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IncomeWithAccounts' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /incomes/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    get:
+      tags: [Incomes]
+      summary: Get an income
+      responses:
+        '200':
+          description: The income
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          income: { $ref: '#/components/schemas/Income' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Incomes]
+      summary: Update an income
+      description: Partial update. A change of amount or account debits the old account and credits the new one. Moving INTO an archived account is refused.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                accountId: { type: string, format: uuid }
+                categoryId: { type: string, format: uuid }
+                amount: { $ref: '#/components/schemas/MoneyInput' }
+                date: { $ref: '#/components/schemas/IsoDate' }
+                source: { type: string, maxLength: 150, nullable: true }
+                note: { type: string, maxLength: 1000, nullable: true }
+      responses:
+        '200':
+          description: Income updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IncomeWithAccounts' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Incomes]
+      summary: Delete an income
+      description: Debits the amount back from the account. Answers the new balances.
+      responses:
+        '200':
+          description: Income deleted
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          accounts:
+                            type: array
+                            items: { $ref: '#/components/schemas/Account' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ----------------------------------------------------------------- Budgets
+  /budgets:
+    get:
+      tags: [Budgets]
+      summary: List the budgets of a month
+      description: |
+        The overall budget first, then categories by name. Not paginated. `month` and `year` each
+        fall back to the current month / year. `spent`, `remaining`, `percentUsed` and `status` are
+        calculated in SQL from that month's expenses (no currency conversion).
+      parameters:
+        - in: query
+          name: month
+          schema: { type: integer, minimum: 1, maximum: 12 }
+        - in: query
+          name: year
+          schema: { type: integer, minimum: 2000, maximum: 2100 }
+      responses:
+        '200':
+          description: Budgets
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          budgets:
+                            type: array
+                            items: { $ref: '#/components/schemas/Budget' }
+                      meta:
+                        type: object
+                        properties:
+                          month: { type: integer }
+                          year: { type: integer }
+                          total: { type: integer }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Budgets]
+      summary: Create a budget
+      description: |
+        `categoryId` (an expense category) left out or `null` creates the OVERALL budget of the month.
+        A second budget for the same category and month, or a second overall budget, answers 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [amount, month, year]
+              properties:
+                categoryId: { type: string, format: uuid, nullable: true }
+                amount: { $ref: '#/components/schemas/MoneyInput' }
+                month: { type: integer, minimum: 1, maximum: 12 }
+                year: { type: integer, minimum: 2000, maximum: 2100 }
+                alertThreshold: { type: integer, minimum: 1, maximum: 100, default: 80 }
+      responses:
+        '201': { $ref: '#/components/responses/BudgetCreated' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /budgets/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    get:
+      tags: [Budgets]
+      summary: Get a budget
+      responses:
+        '200': { $ref: '#/components/responses/BudgetOne' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Budgets]
+      summary: Update a budget
+      description: Only `amount` and `alertThreshold` can change. To move a budget, delete it and create a new one.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                amount: { $ref: '#/components/schemas/MoneyInput' }
+                alertThreshold: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        '200': { $ref: '#/components/responses/BudgetOne' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Budgets]
+      summary: Delete a budget
+      responses:
+        '200': { $ref: '#/components/responses/MessageOnly' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # --------------------------------------------------------------- Recurring
+  /recurring:
+    get:
+      tags: [Recurring]
+      summary: List recurring templates
+      description: The ones that run first at the top. Not paginated.
+      parameters:
+        - in: query
+          name: type
+          schema: { $ref: '#/components/schemas/CategoryType' }
+        - in: query
+          name: isActive
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: Templates
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          recurringTransactions:
+                            type: array
+                            items: { $ref: '#/components/schemas/Recurring' }
+                      meta:
+                        type: object
+                        properties:
+                          total: { type: integer }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Recurring]
+      summary: Create a recurring template
+      description: |
+        Creating a template changes no balance and creates no transaction: a daily job (00:05 UTC)
+        does that. The category type must match `type`. `nextRunDate` is the first schedule date on or
+        after today (past dates are skipped). A schedule that has already ended answers 400.
+        Monthly and yearly schedules keep the start day when they can (Jan 31, Feb 28, Mar 31).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [type, amount, accountId, categoryId, frequency]
+              properties:
+                type: { $ref: '#/components/schemas/CategoryType' }
+                amount: { $ref: '#/components/schemas/MoneyInput' }
+                accountId: { type: string, format: uuid }
+                categoryId: { type: string, format: uuid }
+                frequency: { $ref: '#/components/schemas/Frequency' }
+                startDate: { $ref: '#/components/schemas/IsoDate' }
+                endDate: { type: string, format: date, nullable: true }
+                note: { type: string, maxLength: 1000, nullable: true }
+      responses:
+        '201': { $ref: '#/components/responses/RecurringCreated' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /recurring/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    get:
+      tags: [Recurring]
+      summary: Get a recurring template
+      responses:
+        '200': { $ref: '#/components/responses/RecurringOne' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Recurring]
+      summary: Update a recurring template
+      description: |
+        Only amount, accountId, categoryId, endDate (`null` clears it) and note can change. Type,
+        frequency and start date are fixed: delete and recreate. `endDate` must not be before `nextRunDate`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                amount: { $ref: '#/components/schemas/MoneyInput' }
+                accountId: { type: string, format: uuid }
+                categoryId: { type: string, format: uuid }
+                endDate: { type: string, format: date, nullable: true }
+                note: { type: string, maxLength: 1000, nullable: true }
+      responses:
+        '200': { $ref: '#/components/responses/RecurringOne' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Recurring]
+      summary: Delete a recurring template
+      description: Transactions it already created are kept.
+      responses:
+        '200': { $ref: '#/components/responses/MessageOnly' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /recurring/{id}/pause:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    post:
+      tags: [Recurring]
+      summary: Pause a template
+      description: Idempotent.
+      responses:
+        '200': { $ref: '#/components/responses/RecurringOne' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /recurring/{id}/resume:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    post:
+      tags: [Recurring]
+      summary: Resume a template
+      description: |
+        Idempotent. Keeps `nextRunDate` when it is today or later, otherwise moves it to the next
+        valid date (no burst of old runs). A schedule that has ended answers 400.
+      responses:
+        '200': { $ref: '#/components/responses/RecurringOne' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  # --------------------------------------------------------------- Dashboard
+  /dashboard/summary:
+    get:
+      tags: [Dashboard]
+      summary: Dashboard cards for one period
+      description: |
+        Balance of the active accounts, income, expense, savings, the previous period for comparison and
+        the 5 newest transactions, all in ONE currency. Transfers are not counted. `meta.availableCurrencies`
+        lists the currencies of the user's accounts so the frontend can offer a switcher.
+        Sending `from` or `to` without a period means `custom`; `from`/`to` with another period answers 400.
+      parameters:
+        - $ref: '#/components/parameters/Period'
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/To'
+        - $ref: '#/components/parameters/CurrencyQuery'
+      responses:
+        '200':
+          description: Summary
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/DashboardSummary' }
+                      meta: { $ref: '#/components/schemas/CurrencyMeta' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /dashboard/trends:
+    get:
+      tags: [Dashboard]
+      summary: Income and expense over time
+      description: |
+        For charts. `granularity` defaults to `day` for up to 62 days and `month` for longer periods.
+        Daily is refused (400) above 366 days. Empty days and months are included with "0.00".
+      parameters:
+        - $ref: '#/components/parameters/Period'
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/To'
+        - $ref: '#/components/parameters/CurrencyQuery'
+        - in: query
+          name: granularity
+          schema: { type: string, enum: [day, month] }
+      responses:
+        '200':
+          description: Trend series
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          currency: { $ref: '#/components/schemas/CurrencyCode' }
+                          period: { $ref: '#/components/schemas/PeriodRange' }
+                          granularity: { type: string, enum: [day, month] }
+                          series:
+                            type: array
+                            items: { $ref: '#/components/schemas/SeriesPoint' }
+                      meta: { $ref: '#/components/schemas/CurrencyMeta' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ----------------------------------------------------------------- Reports
+  /reports/monthly:
+    get:
+      tags: [Reports]
+      summary: Monthly report
+      description: Totals, comparison with the month before, a day-by-day series and category breakdowns. `year` and `month` default to the current month.
+      parameters:
+        - in: query
+          name: year
+          schema: { type: integer, minimum: 2000, maximum: 2100 }
+        - in: query
+          name: month
+          schema: { type: integer, minimum: 1, maximum: 12 }
+        - $ref: '#/components/parameters/CurrencyQuery'
+      responses:
+        '200':
+          description: Monthly report
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          currency: { $ref: '#/components/schemas/CurrencyCode' }
+                          year: { type: integer }
+                          month: { type: integer }
+                          from: { $ref: '#/components/schemas/IsoDate' }
+                          to: { $ref: '#/components/schemas/IsoDate' }
+                          totals: { $ref: '#/components/schemas/Totals' }
+                          previous: { $ref: '#/components/schemas/PreviousTotals' }
+                          change: { $ref: '#/components/schemas/Change' }
+                          daily:
+                            type: array
+                            items: { $ref: '#/components/schemas/SeriesPoint' }
+                          expenseByCategory:
+                            type: array
+                            items: { $ref: '#/components/schemas/CategoryTotal' }
+                          incomeByCategory:
+                            type: array
+                            items: { $ref: '#/components/schemas/CategoryTotal' }
+                      meta: { $ref: '#/components/schemas/CurrencyMeta' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /reports/yearly:
+    get:
+      tags: [Reports]
+      summary: Yearly report
+      description: Totals, comparison with the year before, 12 monthly points and category breakdowns. `year` defaults to the current year.
+      parameters:
+        - in: query
+          name: year
+          schema: { type: integer, minimum: 2000, maximum: 2100 }
+        - $ref: '#/components/parameters/CurrencyQuery'
+      responses:
+        '200':
+          description: Yearly report
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          currency: { $ref: '#/components/schemas/CurrencyCode' }
+                          year: { type: integer }
+                          from: { $ref: '#/components/schemas/IsoDate' }
+                          to: { $ref: '#/components/schemas/IsoDate' }
+                          totals: { $ref: '#/components/schemas/Totals' }
+                          previous: { $ref: '#/components/schemas/PreviousTotals' }
+                          change: { $ref: '#/components/schemas/Change' }
+                          monthly:
+                            type: array
+                            items: { $ref: '#/components/schemas/SeriesPoint' }
+                          expenseByCategory:
+                            type: array
+                            items: { $ref: '#/components/schemas/CategoryTotal' }
+                          incomeByCategory:
+                            type: array
+                            items: { $ref: '#/components/schemas/CategoryTotal' }
+                      meta: { $ref: '#/components/schemas/CurrencyMeta' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /reports/by-category:
+    get:
+      tags: [Reports]
+      summary: Totals per category for a date range
+      description: Biggest first, with the percent share. The range is at most 5 years.
+      parameters:
+        - {
+            in: query,
+            name: from,
+            required: true,
+            schema: { $ref: '#/components/schemas/IsoDate' },
+          }
+        - { in: query, name: to, required: true, schema: { $ref: '#/components/schemas/IsoDate' } }
+        - in: query
+          name: type
+          schema: { type: string, enum: [expense, income], default: expense }
+        - $ref: '#/components/parameters/CurrencyQuery'
+      responses:
+        '200':
+          description: Category totals
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          currency: { $ref: '#/components/schemas/CurrencyCode' }
+                          type: { $ref: '#/components/schemas/CategoryType' }
+                          from: { $ref: '#/components/schemas/IsoDate' }
+                          to: { $ref: '#/components/schemas/IsoDate' }
+                          total: { $ref: '#/components/schemas/Money' }
+                          categories:
+                            type: array
+                            items: { $ref: '#/components/schemas/CategoryTotal' }
+                      meta: { $ref: '#/components/schemas/CurrencyMeta' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /reports/by-account:
+    get:
+      tags: [Reports]
+      summary: Income and expense per account for a date range
+      description: An archived account is listed only if it had activity in the range. The range is at most 5 years.
+      parameters:
+        - {
+            in: query,
+            name: from,
+            required: true,
+            schema: { $ref: '#/components/schemas/IsoDate' },
+          }
+        - { in: query, name: to, required: true, schema: { $ref: '#/components/schemas/IsoDate' } }
+        - $ref: '#/components/parameters/CurrencyQuery'
+      responses:
+        '200':
+          description: Account totals
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          currency: { $ref: '#/components/schemas/CurrencyCode' }
+                          from: { $ref: '#/components/schemas/IsoDate' }
+                          to: { $ref: '#/components/schemas/IsoDate' }
+                          totals:
+                            type: object
+                            properties:
+                              income: { $ref: '#/components/schemas/Money' }
+                              expense: { $ref: '#/components/schemas/Money' }
+                              savings: { $ref: '#/components/schemas/Money' }
+                          accounts:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                account:
+                                  type: object
+                                  properties:
+                                    id: { type: string, format: uuid }
+                                    name: { type: string }
+                                    type: { $ref: '#/components/schemas/AccountType' }
+                                    color: { type: string }
+                                    isArchived: { type: boolean }
+                                    balance: { $ref: '#/components/schemas/Money' }
+                                income: { $ref: '#/components/schemas/Money' }
+                                expense: { $ref: '#/components/schemas/Money' }
+                                net: { $ref: '#/components/schemas/Money' }
+                      meta: { $ref: '#/components/schemas/CurrencyMeta' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ----------------------------------------------------------- Notifications
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: List notifications
+      description: Newest first.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - in: query
+          name: isRead
+          schema: { type: boolean }
+        - in: query
+          name: type
+          schema: { $ref: '#/components/schemas/NotificationType' }
+      responses:
+        '200':
+          description: One page of notifications
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          notifications:
+                            type: array
+                            items: { $ref: '#/components/schemas/Notification' }
+                      meta: { $ref: '#/components/schemas/PaginationMeta' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /notifications/unread-count:
+    get:
+      tags: [Notifications]
+      summary: Number of unread notifications
+      responses:
+        '200':
+          description: The count
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          unreadCount: { type: integer, example: 3 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /notifications/read-all:
+    put:
+      tags: [Notifications]
+      summary: Mark all notifications as read
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          updated: { type: integer, description: How many notifications changed }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /notifications/{id}/read:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    put:
+      tags: [Notifications]
+      summary: Mark one notification as read
+      description: Idempotent. An unknown id or another user's id answers 404.
+      responses:
+        '200':
+          description: The notification
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          notification: { $ref: '#/components/schemas/Notification' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ----------------------------------------------------------------- Exports
+  /exports/expenses:
+    get:
+      tags: [Exports]
+      summary: Export expenses as CSV, Excel or PDF
+      description: |
+        The same filters as `GET /expenses`, but no `page`/`limit`: the file has every match, at most
+        5000 rows (above that: 400 "Narrow the date range or add a filter"). Binary response with
+        `Content-Disposition: attachment; filename="expenses_<range or today>.<ext>"` (readable by the
+        browser: it is in the CORS exposed headers) and `Cache-Control: private, no-store`. Download it with
+        the API client as a blob (Authorization header). Rate limited to a tenth of the normal API limit.
+
+        CSV: UTF-8 with a byte order mark, CRLF lines; cells starting with `= + - @` get a leading `'`
+        (CSV injection guard). Excel: typed cells and one total per currency. PDF: A4 landscape, only
+        Latin-1 characters (others show as `?`). Totals are per currency, never converted.
+      parameters:
+        - in: query
+          name: format
+          schema: { type: string, enum: [csv, xlsx, pdf], default: csv }
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/To'
+        - $ref: '#/components/parameters/CategoryIdQuery'
+        - $ref: '#/components/parameters/AccountIdQuery'
+        - $ref: '#/components/parameters/MinAmount'
+        - $ref: '#/components/parameters/MaxAmount'
+        - $ref: '#/components/parameters/Tag'
+        - $ref: '#/components/parameters/PaymentMethod'
+        - $ref: '#/components/parameters/SortBy'
+        - $ref: '#/components/parameters/SortOrder'
+      responses:
+        '200':
+          description: The file
+          headers:
+            Content-Disposition:
+              schema:
+                {
+                  type: string,
+                  example: 'attachment; filename="expenses_2026-11-01_2026-11-30.csv"',
+                }
+            Cache-Control:
+              schema: { type: string, example: 'private, no-store' }
+          content:
+            text/csv: { schema: { type: string, format: binary } }
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+            application/pdf: { schema: { type: string, format: binary } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+# =========================================================== Components
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token from login, verify-email or refresh (valid 15 minutes).
+
+  parameters:
+    IdPath:
+      in: path
+      name: id
+      required: true
+      schema: { type: string, format: uuid }
+    Page:
+      in: query
+      name: page
+      schema: { type: integer, minimum: 1, default: 1 }
+    Limit:
+      in: query
+      name: limit
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    Search:
+      in: query
+      name: search
+      description: Text to look for (note and category name; for incomes also source).
+      schema: { type: string, minLength: 1, maxLength: 100 }
+    From:
+      in: query
+      name: from
+      description: First day, inclusive (YYYY-MM-DD).
+      schema: { $ref: '#/components/schemas/IsoDate' }
+    To:
+      in: query
+      name: to
+      description: Last day, inclusive (YYYY-MM-DD).
+      schema: { $ref: '#/components/schemas/IsoDate' }
+    CategoryIdQuery:
+      in: query
+      name: categoryId
+      schema: { type: string, format: uuid }
+    AccountIdQuery:
+      in: query
+      name: accountId
+      schema: { type: string, format: uuid }
+    MinAmount:
+      in: query
+      name: minAmount
+      schema: { type: string, example: '10.00' }
+    MaxAmount:
+      in: query
+      name: maxAmount
+      schema: { type: string, example: '500.00' }
+    Tag:
+      in: query
+      name: tag
+      schema: { type: string, minLength: 1, maxLength: 30 }
+    PaymentMethod:
+      in: query
+      name: paymentMethod
+      schema: { $ref: '#/components/schemas/PaymentMethod' }
+    SortBy:
+      in: query
+      name: sortBy
+      schema: { type: string, enum: [date, amount, createdAt], default: date }
+    SortOrder:
+      in: query
+      name: sortOrder
+      schema: { type: string, enum: [asc, desc], default: desc }
+    Period:
+      in: query
+      name: period
+      schema:
+        type: string
+        enum: [this_month, last_month, this_year, last_year, custom]
+        default: this_month
+    CurrencyQuery:
+      in: query
+      name: currency
+      description: Currency to report in. Defaults to the profile currency. Amounts are never converted.
+      schema: { $ref: '#/components/schemas/CurrencyCode' }
+
+  responses:
+    MessageOnly:
+      description: Done
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Envelope' }
+    AuthSuccess:
+      description: Logged in. The `refreshToken` cookie is set.
+      headers:
+        Set-Cookie:
+          description: httpOnly `refreshToken` cookie, path /api/v1/auth, 7 days
+          schema: { type: string }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      user: { $ref: '#/components/schemas/User' }
+                      accessToken: { type: string }
+    UserOnly:
+      description: The user
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      user: { $ref: '#/components/schemas/User' }
+    CategoryOne:
+      description: The category
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      category: { $ref: '#/components/schemas/Category' }
+    CategoryCreated:
+      description: Category created
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      category: { $ref: '#/components/schemas/Category' }
+    AccountOne:
+      description: The account
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      account: { $ref: '#/components/schemas/Account' }
+    AccountCreated:
+      description: Account created
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      account: { $ref: '#/components/schemas/Account' }
+    BudgetOne:
+      description: The budget
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      budget: { $ref: '#/components/schemas/Budget' }
+    BudgetCreated:
+      description: Budget created
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      budget: { $ref: '#/components/schemas/Budget' }
+    RecurringOne:
+      description: The recurring template
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      recurring: { $ref: '#/components/schemas/Recurring' }
+    RecurringCreated:
+      description: Template created
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      recurring: { $ref: '#/components/schemas/Recurring' }
+    ValidationError:
+      description: Validation failed or the request is not allowed (400)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            success: false
+            message: Validation failed
+            data: null
+            meta: null
+            errors:
+              - { field: amount, message: Amount must be greater than 0 }
+    Unauthorized:
+      description: Missing, invalid or expired access token (401)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Forbidden:
+      description: Not allowed (403)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: Not found, or it belongs to another user (404)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Conflict:
+      description: Conflict with existing data (409)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    TooManyRequests:
+      description: Rate limit exceeded (429)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  schemas:
+    # ---------- envelope
+    Envelope:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string, example: Success }
+        data: { nullable: true }
+        meta: { nullable: true }
+    ErrorResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string }
+        data: { nullable: true, example: null }
+        meta: { nullable: true, example: null }
+        code:
+          type: string
+          description: Machine-readable code. Only `EMAIL_NOT_VERIFIED` exists today.
+          example: EMAIL_NOT_VERIFIED
+        errors:
+          type: array
+          description: Field-level problems of a validation error.
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              message: { type: string }
+    PaginationMeta:
+      type: object
+      properties:
+        total: { type: integer }
+        page: { type: integer }
+        limit: { type: integer }
+        totalPages: { type: integer }
+        hasNext: { type: boolean }
+        hasPrev: { type: boolean }
+    CurrencyMeta:
+      type: object
+      properties:
+        availableCurrencies:
+          type: array
+          description: Currencies of the user's accounts.
+          items: { $ref: '#/components/schemas/CurrencyCode' }
+    HealthResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            status: { type: string, enum: [ok, degraded] }
+            environment: { type: string }
+            uptimeSeconds: { type: integer }
+            timestamp: { type: string, format: date-time }
+            database:
+              type: object
+              properties:
+                status: { type: string, enum: [up, down] }
+                latencyMs: { type: number, nullable: true }
+
+    RegisterRequest:
+      type: object
+      required: [name, email, password]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 100 }
+        email: { type: string, format: email, maxLength: 255 }
+        password: { $ref: '#/components/schemas/Password' }
+
+    # ---------- primitives
+    Money:
+      type: string
+      description: Exact amount with 2 decimals. Never a float.
+      example: '12.50'
+    MoneyInput:
+      description: A string or a number with at most 2 decimals and up to 10 digits before the point.
+      oneOf:
+        - { type: string, pattern: '^-?\d{1,10}(\.\d{1,2})?$', example: '12.50' }
+        - { type: number, example: 12.5 }
+    IsoDate:
+      type: string
+      format: date
+      example: '2026-11-08'
+    CurrencyCode:
+      type: string
+      pattern: '^[A-Za-z]{3}$'
+      description: 3-letter code, stored upper-case.
+      example: USD
+    Color:
+      type: string
+      pattern: '^#[0-9A-Fa-f]{6}$'
+      example: '#3B82F6'
+    Password:
+      type: string
+      minLength: 8
+      description: At least 8 characters (72 bytes at most) with an upper-case letter, a lower-case letter, a digit and a special character.
+      example: Str0ng@Pass
+    Tags:
+      type: array
+      maxItems: 10
+      description: Trimmed, lower-case, unique, 30 characters each.
+      items: { type: string, minLength: 1, maxLength: 30 }
+    CategoryType: { type: string, enum: [income, expense] }
+    AccountType: { type: string, enum: [cash, bank, card, savings], default: cash }
+    PaymentMethod:
+      type: string
+      enum: [cash, card, bank_transfer, mobile_wallet, other]
+      default: cash
+    Frequency: { type: string, enum: [daily, weekly, monthly, yearly] }
+    NotificationType:
+      type: string
+      description: |
+        `budget_warning` (alert level reached), `budget_exceeded`, `recurring_created` (the job added
+        transactions), `weekly_summary` (Monday summary), `system` (for example a template was paused).
+      enum: [budget_warning, budget_exceeded, recurring_created, weekly_summary, system]
+
+    # ---------- resources
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email }
+        avatarUrl: { type: string, nullable: true, example: /uploads/avatars/<file>.png }
+        currency: { $ref: '#/components/schemas/CurrencyCode' }
+        language: { type: string, enum: [en, ar] }
+        theme: { type: string, enum: [light, dark, system] }
+        role: { type: string, enum: [user, admin] }
+        emailVerified: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    Category:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type: { $ref: '#/components/schemas/CategoryType' }
+        icon: { type: string }
+        color: { type: string }
+        isDefault: { type: boolean }
+    Account:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type: { $ref: '#/components/schemas/AccountType' }
+        balance: { $ref: '#/components/schemas/Money' }
+        currency: { $ref: '#/components/schemas/CurrencyCode' }
+        color: { type: string }
+        isArchived: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    Transfer:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        fromAccountId: { type: string, format: uuid }
+        toAccountId: { type: string, format: uuid }
+        amount: { $ref: '#/components/schemas/Money' }
+        date: { $ref: '#/components/schemas/IsoDate' }
+        note: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+    AccountRef:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        currency: { $ref: '#/components/schemas/CurrencyCode' }
+    CategoryRef:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        icon: { type: string }
+        color: { type: string }
+    Expense:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        amount: { $ref: '#/components/schemas/Money' }
+        date: { $ref: '#/components/schemas/IsoDate' }
+        note: { type: string, nullable: true }
+        paymentMethod: { $ref: '#/components/schemas/PaymentMethod' }
+        tags:
+          type: array
+          items: { type: string }
+        receiptUrl:
+          type: string
+          nullable: true
+          description: Private download route (`/api/v1/expenses/{id}/receipt`), or null.
+        recurringId: { type: string, format: uuid, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        account: { $ref: '#/components/schemas/AccountRef' }
+        category: { $ref: '#/components/schemas/CategoryRef' }
+    Income:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        amount: { $ref: '#/components/schemas/Money' }
+        date: { $ref: '#/components/schemas/IsoDate' }
+        source: { type: string, nullable: true }
+        note: { type: string, nullable: true }
+        recurringId: { type: string, format: uuid, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        account: { $ref: '#/components/schemas/AccountRef' }
+        category: { $ref: '#/components/schemas/CategoryRef' }
+    ExpenseWithAccounts:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                expense: { $ref: '#/components/schemas/Expense' }
+                accounts:
+                  type: array
+                  description: New balances of the accounts the request touched.
+                  items: { $ref: '#/components/schemas/Account' }
+    IncomeWithAccounts:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                income: { $ref: '#/components/schemas/Income' }
+                accounts:
+                  type: array
+                  description: New balances of the accounts the request touched.
+                  items: { $ref: '#/components/schemas/Account' }
+    Budget:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        category:
+          allOf:
+            - $ref: '#/components/schemas/CategoryRef'
+          nullable: true
+          description: null for the overall budget.
+        amount: { $ref: '#/components/schemas/Money' }
+        month: { type: integer }
+        year: { type: integer }
+        alertThreshold:
+          { type: integer, description: Percent of the amount at which the warning starts. }
+        spent: { $ref: '#/components/schemas/Money' }
+        remaining: { $ref: '#/components/schemas/Money' }
+        percentUsed: { type: number, description: One decimal. }
+        status:
+          type: string
+          enum: [ok, warning, exceeded]
+          description: '`warning` from the alert threshold up to exactly 100%; `exceeded` above the amount.'
+        createdAt: { type: string, format: date-time }
+    Recurring:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        type: { $ref: '#/components/schemas/CategoryType' }
+        amount: { $ref: '#/components/schemas/Money' }
+        frequency: { $ref: '#/components/schemas/Frequency' }
+        startDate: { $ref: '#/components/schemas/IsoDate' }
+        endDate: { type: string, format: date, nullable: true }
+        nextRunDate: { $ref: '#/components/schemas/IsoDate' }
+        isActive: { type: boolean }
+        note: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        account: { $ref: '#/components/schemas/AccountRef' }
+        category: { $ref: '#/components/schemas/CategoryRef' }
+    Notification:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        type: { $ref: '#/components/schemas/NotificationType' }
+        title: { type: string }
+        message: { type: string }
+        isRead: { type: boolean }
+        createdAt: { type: string, format: date-time }
+
+    # ---------- insights
+    PeriodRange:
+      type: object
+      properties:
+        key: { type: string, enum: [this_month, last_month, this_year, last_year, custom] }
+        from: { $ref: '#/components/schemas/IsoDate' }
+        to: { $ref: '#/components/schemas/IsoDate' }
+    Totals:
+      type: object
+      properties:
+        income: { $ref: '#/components/schemas/Money' }
+        expense: { $ref: '#/components/schemas/Money' }
+        savings: { $ref: '#/components/schemas/Money' }
+        savingsRate:
+          {
+            type: number,
+            nullable: true,
+            description: 'Percent, one decimal. null when there was no income.',
+          }
+        incomeCount: { type: integer }
+        expenseCount: { type: integer }
+    PreviousTotals:
+      type: object
+      properties:
+        year: { type: integer }
+        month: { type: integer }
+        income: { $ref: '#/components/schemas/Money' }
+        expense: { $ref: '#/components/schemas/Money' }
+        savings: { $ref: '#/components/schemas/Money' }
+    Change:
+      type: object
+      description: Percent change against the previous period, one decimal. null when the previous value is 0.
+      properties:
+        income: { type: number, nullable: true }
+        expense: { type: number, nullable: true }
+    SeriesPoint:
+      type: object
+      properties:
+        period:
+          {
+            type: string,
+            description: '"2026-11-09" (day) or "2026-11" (month)',
+            example: '2026-11-09',
+          }
+        income: { $ref: '#/components/schemas/Money' }
+        expense: { $ref: '#/components/schemas/Money' }
+        net: { $ref: '#/components/schemas/Money' }
+    CategoryTotal:
+      type: object
+      properties:
+        category: { $ref: '#/components/schemas/CategoryRef' }
+        total: { $ref: '#/components/schemas/Money' }
+        count: { type: integer }
+        percent: { type: number, description: 'Share of the total, one decimal.' }
+    DashboardSummary:
+      type: object
+      properties:
+        currency: { $ref: '#/components/schemas/CurrencyCode' }
+        period: { $ref: '#/components/schemas/PeriodRange' }
+        balance:
+          type: object
+          properties:
+            total: { $ref: '#/components/schemas/Money' }
+            accountCount: { type: integer }
+        income: { $ref: '#/components/schemas/Money' }
+        expense: { $ref: '#/components/schemas/Money' }
+        savings: { $ref: '#/components/schemas/Money' }
+        savingsRate: { type: number, nullable: true }
+        transactionCount: { type: integer }
+        previous:
+          type: object
+          properties:
+            from: { $ref: '#/components/schemas/IsoDate' }
+            to: { $ref: '#/components/schemas/IsoDate' }
+            income: { $ref: '#/components/schemas/Money' }
+            expense: { $ref: '#/components/schemas/Money' }
+            savings: { $ref: '#/components/schemas/Money' }
+        change: { $ref: '#/components/schemas/Change' }
+        recentTransactions:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              type: { $ref: '#/components/schemas/CategoryType' }
+              amount: { $ref: '#/components/schemas/Money' }
+              date: { $ref: '#/components/schemas/IsoDate' }
+              note: { type: string, nullable: true }
+              source: { type: string, nullable: true }
+              category: { $ref: '#/components/schemas/CategoryRef' }
+              account:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  name: { type: string }
