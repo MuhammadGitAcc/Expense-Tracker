@@ -44,13 +44,13 @@ function ToastItem({ toast, onDismiss }) {
 /**
  * Mount ONCE, inside the providers (step 7.4). It only shows the toasts;
  * create them with toast.success(...) from '@/hooks/useToast' (works anywhere).
- * Phone: centered at the bottom. Larger screens: at the end side (right, or left in Arabic).
+ * Phone: centered at the bottom, above the bottom navigation bar. Larger screens: at the end side (right, or left in Arabic).
  */
 export function ToastViewport() {
   const { toasts, dismiss } = useToast();
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] pb-safe">
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] pb-safe max-md:mb-16">
       <div className="flex flex-col items-center gap-2 p-4 sm:items-end">
         {toasts.map((item) => (
           <ToastItem key={item.id} toast={item} onDismiss={dismiss} />
