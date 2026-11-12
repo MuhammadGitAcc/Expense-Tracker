@@ -10,6 +10,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 COPY src ./src
 COPY database ./database
+COPY docs ./docs
 
 # Writable folders for logs and uploads, then drop root privileges.
 RUN mkdir -p logs uploads && chown -R node:node /app

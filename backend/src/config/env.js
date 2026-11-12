@@ -44,6 +44,9 @@ const schema = z.object({
   SMTP_PASS: z.string().optional(),
   EMAIL_FROM: z.string().optional(),
 
+  // Swagger UI (/api/docs) is on outside production; set true to also serve it in production.
+  ENABLE_API_DOCS: bool.default(false),
+
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'http', 'debug']).default('debug'),
 });
 
@@ -59,6 +62,31 @@ if (!parsed.success) {
 }
 
 const e = parsed.data;
+
+// Production safety net: refuse to start with settings that are only fine on a laptop.
+if (e.NODE_ENV === 'production') {
+  const problems = [];
+  if (!e.COOKIE_SECURE) {
+    problems.push('COOKIE_SECURE must be true (the refresh cookie needs HTTPS)');
+  }
+  const origins = e.CORS_ORIGIN.split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+  if (origins.length === 0 || origins.some((o) => !o.startsWith('https://'))) {
+    problems.push('CORS_ORIGIN must list only https:// origins');
+  }
+  if (!e.FRONTEND_URL.startsWith('https://')) {
+    problems.push('FRONTEND_URL must start with https://');
+  }
+  if (problems.length > 0) {
+    process.stderr.write(
+      `Unsafe production configuration (check the environment variables):\n${problems
+        .map((p) => `  - ${p}`)
+        .join('\n')}\n`,
+    );
+    process.exit(1);
+  }
+}
 
 module.exports = Object.freeze({
   nodeEnv: e.NODE_ENV,
@@ -91,5 +119,7 @@ module.exports = Object.freeze({
     pass: e.SMTP_PASS,
     from: e.EMAIL_FROM,
   },
+  // Swagger UI (/api/docs) is on outside production; set true to also serve it in production.
+  enableApiDocs: e.ENABLE_API_DOCS,
   logLevel: e.LOG_LEVEL,
 });
