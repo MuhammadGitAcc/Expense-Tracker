@@ -24,6 +24,9 @@ export const PATHS = {
 
   // errors
   serverError: '/error',
+
+  // development only (no link in the app)
+  demo: '/dev/components',
 };
 
 export const expensePath = (id) => `/expenses/${id}`;

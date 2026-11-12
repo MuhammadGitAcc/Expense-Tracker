@@ -1,0 +1,56 @@
+{
+  "common": {
+    "loading": "Loading…",
+    "close": "Close",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "tryAgain": "Try again",
+    "search": "Search",
+    "clear": "Clear search"
+  },
+  "theme": {
+    "switchToDark": "Switch to dark mode",
+    "switchToLight": "Switch to light mode"
+  },
+  "errors": {
+    "somethingWrong": "Something went wrong",
+    "somethingWrongText": "This page could not be shown. Try again, and if the problem stays, reload the page.",
+    "reload": "Reload page"
+  },
+  "pagination": {
+    "label": "Pagination",
+    "previous": "Previous",
+    "next": "Next",
+    "perPage": "Per page",
+    "goToPage": "Go to page {{page}}",
+    "pageOf": "Page {{page}} of {{totalPages}}",
+    "showing": "Showing {{from}}–{{to}} of {{total}}"
+  },
+  "upload": {
+    "dropOrBrowse": "Click to choose a file, or drop it here",
+    "hint": "{{types}}, up to {{max}} MB",
+    "remove": "Remove file",
+    "invalidType": "This file type is not allowed. Use: {{types}}.",
+    "tooLarge": "The file is too large (maximum {{max}} MB)."
+  },
+  "validation": {
+    "required": "This field is required",
+    "emailInvalid": "Enter a valid email address",
+    "nameMin": "The name must have at least 2 characters",
+    "nameMax": "The name must have at most 100 characters",
+    "passwordMin": "Use at least 8 characters",
+    "passwordLower": "Add a lowercase letter",
+    "passwordUpper": "Add an uppercase letter",
+    "passwordDigit": "Add a number",
+    "passwordSpecial": "Add a special character",
+    "passwordMax": "The password is too long (72 bytes at most)",
+    "passwordsMismatch": "The passwords do not match",
+    "amountFormat": "Enter an amount with at most 2 decimals, for example 12.50",
+    "amountPositive": "The amount must be greater than zero",
+    "dateInvalid": "Enter a valid date",
+    "currencyInvalid": "Choose a valid currency",
+    "codeFormat": "The code has 6 digits",
+    "colorInvalid": "Choose a valid color",
+    "tooLong": "This text is too long"
+  }
+}

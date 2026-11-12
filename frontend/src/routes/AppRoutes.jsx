@@ -50,6 +50,9 @@ const SettingsPage = lazyPage(() => import('@/pages/settings/SettingsPage'));
 const NotFoundPage = lazyPage(() => import('@/pages/errors/NotFoundPage'));
 const ServerErrorPage = lazyPage(() => import('@/pages/errors/ServerErrorPage'));
 
+// Development only: the component showcase. A production build removes this line and the route.
+const DemoPage = import.meta.env.DEV ? lazyPage(() => import('@/pages/dev/DemoPage')) : null;
+
 export function AppRoutes() {
   const { pathname } = useLocation();
 
@@ -91,6 +94,7 @@ export function AppRoutes() {
           </Route>
 
           <Route path={PATHS.serverError} element={<ServerErrorPage />} />
+          {DemoPage ? <Route path={PATHS.demo} element={<DemoPage />} /> : null}
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Suspense>
