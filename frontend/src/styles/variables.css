@@ -1,0 +1,53 @@
+:root {
+  --color-canvas: 248 250 252;
+  --color-surface: 255 255 255;
+  --color-surface-muted: 241 245 249;
+  --color-line: 226 232 240;
+  --color-content: 15 23 42;
+  --color-content-muted: 100 116 139;
+  --color-ring: 99 102 241;
+
+  --color-primary: 79 70 229;
+  --color-primary-hover: 67 56 202;
+  --color-primary-fg: 255 255 255;
+  --color-primary-soft: 238 242 255;
+  --color-primary-text: 67 56 202;
+
+  --color-income: 4 120 87;
+  --color-income-soft: 236 253 245;
+  --color-expense: 225 29 72;
+  --color-expense-soft: 255 241 242;
+  --color-warning: 180 83 9;
+  --color-warning-soft: 255 251 235;
+  --color-danger: 220 38 38;
+  --color-danger-soft: 254 242 242;
+  --color-success: 21 128 61;
+  --color-success-soft: 240 253 244;
+}
+
+.dark {
+  --color-canvas: 2 6 23;
+  --color-surface: 15 23 42;
+  --color-surface-muted: 30 41 59;
+  --color-line: 51 65 85;
+  --color-content: 241 245 249;
+  --color-content-muted: 148 163 184;
+  --color-ring: 129 140 248;
+
+  --color-primary: 79 70 229;
+  --color-primary-hover: 99 102 241;
+  --color-primary-fg: 255 255 255;
+  --color-primary-soft: 49 46 129;
+  --color-primary-text: 165 180 252;
+
+  --color-income: 52 211 153;
+  --color-income-soft: 2 44 34;
+  --color-expense: 251 113 133;
+  --color-expense-soft: 76 5 25;
+  --color-warning: 251 191 36;
+  --color-warning-soft: 69 26 3;
+  --color-danger: 248 113 113;
+  --color-danger-soft: 69 10 10;
+  --color-success: 74 222 128;
+  --color-success-soft: 5 46 22;
+}
