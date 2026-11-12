@@ -32,6 +32,7 @@ const MainLayout = lazyLayout(() => import('@/layouts/MainLayout'));
 
 const Login = lazyPage(() => import('@/pages/auth/Login'));
 const Register = lazyPage(() => import('@/pages/auth/Register'));
+const VerifyEmail = lazyPage(() => import('@/pages/auth/VerifyEmail'));
 const ForgotPassword = lazyPage(() => import('@/pages/auth/ForgotPassword'));
 const ResetPassword = lazyPage(() => import('@/pages/auth/ResetPassword'));
 
@@ -66,6 +67,7 @@ export function AppRoutes() {
             <Route element={<AuthLayout />}>
               <Route path={PATHS.login} element={<Login />} />
               <Route path={PATHS.register} element={<Register />} />
+              <Route path={PATHS.verifyEmail} element={<VerifyEmail />} />
               <Route path={PATHS.forgotPassword} element={<ForgotPassword />} />
             </Route>
           </Route>
