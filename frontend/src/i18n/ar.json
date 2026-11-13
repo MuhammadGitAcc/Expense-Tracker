@@ -437,5 +437,43 @@
     "noResultsTitle": "لا جداول مطابقة",
     "noResultsText": "جرّب مرشحات أخرى، أو امسحها.",
     "clearFilters": "مسح المرشحات"
+  },
+  "dashboard": {
+    "title": "لوحة التحكم",
+    "welcome": "أهلًا بعودتك يا {{name}}. هذه أموالك في لمحة.",
+    "addExpense": "إضافة مصروف",
+    "periodLabel": "الفترة",
+    "periods": {
+      "this_month": "هذا الشهر",
+      "last_month": "الشهر الماضي",
+      "this_year": "هذه السنة",
+      "last_year": "السنة الماضية",
+      "custom": "نطاق مخصص"
+    },
+    "from": "من",
+    "to": "إلى",
+    "currencyLabel": "العملة",
+    "customHint": "اختر التاريخين لعرض الأرقام.",
+    "rangeInvalid": "يجب ألا يكون تاريخ النهاية قبل تاريخ البداية.",
+    "rangeTooLong": "النطاق الزمني طويل جدًا (5 سنوات كحد أقصى).",
+    "range": "من {{from}} إلى {{to}}",
+    "transactionCount": "المعاملات: {{count}}",
+    "balance": "الرصيد الإجمالي",
+    "activeAccounts": "الحسابات النشطة: {{count}}",
+    "income": "الدخل",
+    "expenses": "المصروفات",
+    "savings": "المدخرات",
+    "savingsRate": "معدل الادخار: {{rate}}",
+    "savingsRateNone": "لا دخل في هذه الفترة",
+    "changeUp": "ارتفاع بنسبة {{percent}} عن الفترة السابقة",
+    "changeDown": "انخفاض بنسبة {{percent}} عن الفترة السابقة",
+    "changeSame": "مثل الفترة السابقة",
+    "changeNone": "لا توجد بيانات للمقارنة بعد",
+    "recentTitle": "أحدث المعاملات",
+    "recentHint": "آخر نشاطاتك بعملة {{currency}}",
+    "recentEmptyTitle": "لا معاملات بعد",
+    "recentEmptyText": "أضف مصروفًا أو دخلًا بعملة {{currency}} وسيظهر هنا.",
+    "viewExpenses": "عرض المصروفات",
+    "viewIncome": "عرض الدخل"
   }
 }
