@@ -338,5 +338,43 @@
       "amountAsc": "Lowest amount"
     },
     "total": "Total of all matching income:"
+  },
+  "budgets": {
+    "title": "Budgets",
+    "subtitle": "Set monthly spending limits and see how much you have used.",
+    "add": "Add budget",
+    "edit": "Edit budget",
+    "overall": "Overall budget",
+    "overallOption": "Overall (all categories)",
+    "category": "Category",
+    "chooseCategory": "Choose a category",
+    "categoryHint": "Pick a category, or the overall budget for all spending.",
+    "amount": "Limit",
+    "amountHint": "In {{currency}}, your profile currency.",
+    "alertThreshold": "Alert at (%)",
+    "alertThresholdHint": "You get an alert when this share of the limit is used.",
+    "thresholdInvalid": "Enter a whole number from 1 to 100",
+    "forMonth": "Budget for {{month}}",
+    "alertAt": "Alert at {{percent}}%",
+    "ofLimit": "of",
+    "remaining": "Remaining:",
+    "overBy": "Over by:",
+    "progressFor": "Budget used: {{name}}",
+    "actionsFor": "Actions for {{name}}",
+    "status": {
+      "ok": "On track",
+      "warning": "Close to limit",
+      "exceeded": "Exceeded"
+    },
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month",
+    "thisMonth": "This month",
+    "created": "Budget added",
+    "updated": "Budget updated",
+    "deleted": "Budget deleted",
+    "deleteTitle": "Delete budget?",
+    "deleteText": "The {{name}} budget of {{amount}} for {{month}} will be deleted. Your expenses are not changed.",
+    "emptyTitle": "No budgets for {{month}}",
+    "emptyText": "Add a budget to keep your spending under control."
   }
 }
