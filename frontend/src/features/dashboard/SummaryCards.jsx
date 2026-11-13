@@ -35,7 +35,7 @@ export function SummaryCardsSkeleton() {
  * the previous period had nothing. upIsGood: income is good when it goes up, spending when it
  * goes down. An arrow and a sentence say it too, so colour is never the only signal.
  */
-function Change({ value, upIsGood }) {
+export function Change({ value, upIsGood }) {
   const { t, i18n } = useTranslation();
 
   if (value === null || value === undefined) {
@@ -64,7 +64,7 @@ function Change({ value, upIsGood }) {
   );
 }
 
-function SummaryCard({ icon: Icon, label, footer, children }) {
+export function SummaryCard({ icon: Icon, label, footer, children }) {
   return (
     <Card as="li" className="flex flex-col gap-2">
       <div className="flex items-center gap-2 text-sm text-content-muted">
