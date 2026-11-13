@@ -474,6 +474,23 @@
     "recentEmptyTitle": "لا معاملات بعد",
     "recentEmptyText": "أضف مصروفًا أو دخلًا بعملة {{currency}} وسيظهر هنا.",
     "viewExpenses": "عرض المصروفات",
-    "viewIncome": "عرض الدخل"
+    "viewIncome": "عرض الدخل",
+    "spendingTitle": "الدخل والمصروفات",
+    "spendingDaily": "لكل يوم",
+    "spendingMonthly": "لكل شهر",
+    "chartLabel": "مخطط أعمدة للدخل والمصروفات عبر الزمن بعملة {{currency}}",
+    "chartEmptyTitle": "لا نشاط في هذه الفترة",
+    "chartEmptyText": "سيُرسم الدخل والمصروفات هنا بمجرد إضافتها.",
+    "categoryTitle": "الإنفاق حسب الفئة",
+    "categoryHint": "المصروفات بعملة {{currency}}",
+    "categoryEmptyTitle": "لا مصروفات في هذه الفترة",
+    "categoryEmptyText": "ستظهر هنا أكبر فئات إنفاقك.",
+    "other": "أخرى",
+    "budgetTitle": "ميزانيات هذا الشهر",
+    "budgetHint": "{{month}}، بعملة {{currency}}",
+    "budgetEmptyTitle": "لا ميزانيات هذا الشهر",
+    "budgetEmptyText": "حدّد سقفًا لفئة ما لتراقب إنفاقك.",
+    "budgetSet": "تحديد ميزانية",
+    "budgetViewAll": "عرض كل الميزانيات"
   }
 }

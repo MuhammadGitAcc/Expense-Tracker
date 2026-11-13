@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -7,16 +7,31 @@ import { Button, buttonStyles } from '@/components/ui/Button';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Select } from '@/components/ui/Select';
+import { BudgetOverview } from '@/features/dashboard/BudgetOverview';
+import { ChartSkeleton } from '@/features/dashboard/ChartCard';
 import {
   RecentTransactions,
   RecentTransactionsSkeleton,
 } from '@/features/dashboard/RecentTransactions';
 import { SummaryCards, SummaryCardsSkeleton } from '@/features/dashboard/SummaryCards';
-import { useDashboardSummary } from '@/features/dashboard/useDashboard';
+import { useDashboardSummary, useDashboardTrends } from '@/features/dashboard/useDashboard';
+import { useCategoryReport } from '@/features/reports/useReports';
 import { useAuth } from '@/hooks/useAuth';
 import { PATHS } from '@/routes/paths';
 import { PERIODS } from '@/utils/constants';
 import { formatDate, isValidISODate, parseISODate, todayISO } from '@/utils/formatDate';
+
+// Recharts is big: the charts load from their own files, after the cards are on screen.
+const SpendingChart = lazy(() =>
+  import('@/features/dashboard/SpendingChart').then((module) => ({
+    default: module.SpendingChart,
+  })),
+);
+const CategoryPieChart = lazy(() =>
+  import('@/features/dashboard/CategoryPieChart').then((module) => ({
+    default: module.CategoryPieChart,
+  })),
+);
 
 const DAY_MS = 86_400_000;
 const MAX_RANGE_DAYS = 366 * 5; // the same limit as the API
@@ -67,6 +82,19 @@ export default function DashboardPage() {
 
   const query = useDashboardSummary(params, { enabled: !problem });
   const summary = query.data;
+  const trendsQuery = useDashboardTrends(params, { enabled: !problem });
+  // The pie uses the exact dates and the currency the summary has just resolved.
+  const categoryQuery = useCategoryReport(
+    summary
+      ? {
+          from: summary.period.from,
+          to: summary.period.to,
+          currency: summary.currency,
+          type: 'expense',
+        }
+      : undefined,
+    { enabled: Boolean(summary) },
+  );
 
   // The currencies of the user's accounts. The chosen one is always in the list.
   const currencies = useMemo(() => {
@@ -90,7 +118,23 @@ export default function DashboardPage() {
     return (
       <div className="space-y-6">
         <SummaryCards summary={summary} />
-        <RecentTransactions transactions={summary.recentTransactions} currency={summary.currency} />
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <Suspense fallback={<ChartSkeleton />}>
+              <SpendingChart query={trendsQuery} />
+            </Suspense>
+          </div>
+          <Suspense fallback={<ChartSkeleton />}>
+            <CategoryPieChart query={categoryQuery} />
+          </Suspense>
+        </div>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <RecentTransactions
+            transactions={summary.recentTransactions}
+            currency={summary.currency}
+          />
+          <BudgetOverview currency={(user?.currency ?? summary.currency).toUpperCase()} />
+        </div>
       </div>
     );
   };

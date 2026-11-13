@@ -474,6 +474,23 @@
     "recentEmptyTitle": "No transactions yet",
     "recentEmptyText": "Add an expense or an income in {{currency}} and it will show up here.",
     "viewExpenses": "View expenses",
-    "viewIncome": "View income"
+    "viewIncome": "View income",
+    "spendingTitle": "Income and expenses",
+    "spendingDaily": "Per day",
+    "spendingMonthly": "Per month",
+    "chartLabel": "Bar chart of income and expenses over time in {{currency}}",
+    "chartEmptyTitle": "No activity in this period",
+    "chartEmptyText": "Income and expenses will be drawn here once you add some.",
+    "categoryTitle": "Spending by category",
+    "categoryHint": "Expenses in {{currency}}",
+    "categoryEmptyTitle": "No expenses in this period",
+    "categoryEmptyText": "Your biggest spending categories will show up here.",
+    "other": "Other",
+    "budgetTitle": "Budgets this month",
+    "budgetHint": "{{month}}, in {{currency}}",
+    "budgetEmptyTitle": "No budgets this month",
+    "budgetEmptyText": "Set a limit for a category to keep an eye on your spending.",
+    "budgetSet": "Set a budget",
+    "budgetViewAll": "View all budgets"
   }
 }
