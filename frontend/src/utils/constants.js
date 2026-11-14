@@ -20,6 +20,7 @@ export const CURRENCIES = [
   'BHD',
   'OMR',
   'JOD',
+  'SYP',
   'TRY',
   'INR',
   'PKR',

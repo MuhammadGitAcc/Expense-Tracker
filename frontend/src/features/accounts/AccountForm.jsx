@@ -11,6 +11,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/useToast';
 import { cn } from '@/utils/cn';
 import { ACCOUNT_TYPES, CURRENCIES } from '@/utils/constants';
+import { currencySymbolOverride } from '@/utils/formatCurrency';
 import { colorSchema, currencySchema, moneySchema } from '@/utils/validators';
 
 export const ACCOUNT_FORM_ID = 'account-form';
@@ -53,7 +54,8 @@ const editSchema = z.object({
 function currencyLabel(code, language) {
   try {
     const name = new Intl.DisplayNames([language], { type: 'currency' }).of(code);
-    return name && name !== code ? `${code} · ${name}` : code;
+    const symbol = currencySymbolOverride(code, language) ?? code;
+    return name && name !== code ? `${symbol} · ${name}` : symbol;
   } catch {
     return code;
   }

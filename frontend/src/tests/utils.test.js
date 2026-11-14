@@ -39,6 +39,12 @@ describe('formatCurrency', () => {
     expect(formatCurrency('12.5', 'ABCD')).toBe('12.50 ABCD');
   });
 
+  it('shows SYP as "SYP" in English and "ل.س" in Arabic, with 2 decimals', () => {
+    expect(formatCurrency('1234.5', 'SYP', 'en')).toMatch(/^SYP\s1,234\.50$/);
+    expect(formatCurrency('1234.5', 'SYP', 'ar')).toMatch(/1,234\.50\s*ل\.س/);
+    expect(formatCompactCurrency('12500', 'SYP', 'en')).toMatch(/^SYP\s12\.5K$/);
+  });
+
   it('uses Latin digits in Arabic', () => {
     expect(formatCurrency('1234.5', 'SAR', 'ar')).toMatch(/1,234\.50/);
   });
