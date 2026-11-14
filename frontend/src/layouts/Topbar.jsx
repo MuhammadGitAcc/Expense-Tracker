@@ -9,6 +9,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { useLogout } from '@/features/auth/useLogout';
+import { NotificationBell } from '@/features/notifications/NotificationBell';
 import { openMobileMenu } from '@/features/ui/uiSlice';
 import { useAuth } from '@/hooks/useAuth';
 import { PATHS } from '@/routes/paths';
@@ -35,6 +36,7 @@ export function Topbar() {
 
       <div className="flex-1" />
 
+      <NotificationBell />
       <LanguageSwitcher />
       <ThemeToggle />
 
