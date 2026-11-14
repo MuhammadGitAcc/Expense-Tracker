@@ -38,7 +38,6 @@ const ResetPassword = lazyPage(() => import('@/pages/auth/ResetPassword'));
 
 const DashboardPage = lazyPage(() => import('@/pages/dashboard/DashboardPage'));
 const ExpensesPage = lazyPage(() => import('@/pages/expenses/ExpensesPage'));
-const ExpenseDetailsPage = lazyPage(() => import('@/pages/expenses/ExpenseDetailsPage'));
 const IncomePage = lazyPage(() => import('@/pages/income/IncomePage'));
 const AccountsPage = lazyPage(() => import('@/pages/accounts/AccountsPage'));
 const CategoriesPage = lazyPage(() => import('@/pages/categories/CategoriesPage'));
@@ -83,7 +82,6 @@ export function AppRoutes() {
               <Route index element={<Navigate to={PATHS.dashboard} replace />} />
               <Route path={PATHS.dashboard} element={<DashboardPage />} />
               <Route path={PATHS.expenses} element={<ExpensesPage />} />
-              <Route path={PATHS.expenseDetails} element={<ExpenseDetailsPage />} />
               <Route path={PATHS.income} element={<IncomePage />} />
               <Route path={PATHS.accounts} element={<AccountsPage />} />
               <Route path={PATHS.categories} element={<CategoriesPage />} />

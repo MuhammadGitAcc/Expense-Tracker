@@ -15,7 +15,6 @@ const ROUTES = [
   { path: PATHS.resetPassword, titleKey: 'auth.resetTitle' },
   { path: PATHS.dashboard, titleKey: 'nav.dashboard' },
   { path: PATHS.expenses, titleKey: 'nav.expenses' },
-  { path: PATHS.expenseDetails, titleKey: 'nav.expenses' },
   { path: PATHS.income, titleKey: 'nav.income' },
   { path: PATHS.accounts, titleKey: 'nav.accounts' },
   { path: PATHS.categories, titleKey: 'nav.categories' },
