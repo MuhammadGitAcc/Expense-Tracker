@@ -5,6 +5,7 @@ import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts';
 import { CurrencyDisplay } from '@/components/common/CurrencyDisplay';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ChartCard, ChartError, ChartSkeleton } from '@/features/dashboard/ChartCard';
+import { categoryName } from '@/utils/categoryName';
 import { formatPercent } from '@/utils/formatCurrency';
 
 const TOP = 6; // the biggest categories get their own slice, the rest are one "Other" slice
@@ -27,7 +28,7 @@ export function CategoryPieChart({ query }) {
 
     const items = top.map((item) => ({
       key: item.category.id,
-      name: item.category.name,
+      name: categoryName(t, item.category.name),
       color: item.category.color,
       total: item.total,
       percent: item.percent,

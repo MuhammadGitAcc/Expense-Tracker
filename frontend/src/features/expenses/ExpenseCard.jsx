@@ -4,6 +4,7 @@ import { CategoryIcon } from '@/components/common/CategoryIcon';
 import { CurrencyDisplay } from '@/components/common/CurrencyDisplay';
 import { Card } from '@/components/ui/Card';
 import { ExpenseActions } from '@/features/expenses/ExpenseActions';
+import { categoryName } from '@/utils/categoryName';
 import { formatDate } from '@/utils/formatDate';
 
 /** One expense on a phone (an <li>: put it inside a <ul>). Tapping the card opens the editor. */
@@ -12,7 +13,7 @@ export function ExpenseCard({ expense, onEdit, onDelete, onViewReceipt }) {
 
   // The category is the title when there is no note, so it is not repeated underneath.
   const details = [
-    expense.note ? expense.category.name : null,
+    expense.note ? categoryName(t, expense.category.name) : null,
     formatDate(expense.date, i18n.language),
     expense.account.name,
   ]
@@ -29,7 +30,7 @@ export function ExpenseCard({ expense, onEdit, onDelete, onViewReceipt }) {
         <CategoryIcon icon={expense.category.icon} color={expense.category.color} />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium text-content">
-            {expense.note || expense.category.name}
+            {expense.note || categoryName(t, expense.category.name)}
           </span>
           <span className="flex items-center gap-1 text-xs text-content-muted">
             <span className="truncate">{details}</span>

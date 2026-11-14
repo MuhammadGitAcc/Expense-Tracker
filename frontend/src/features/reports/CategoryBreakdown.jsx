@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { CategoryIcon } from '@/components/common/CategoryIcon';
 import { CurrencyDisplay } from '@/components/common/CurrencyDisplay';
 import { Card, CardHeader } from '@/components/ui/Card';
+import { categoryName } from '@/utils/categoryName';
 import { formatPercent } from '@/utils/formatCurrency';
 
 /**
@@ -25,7 +26,9 @@ export function CategoryBreakdown({ title, items, currency, tone, emptyText }) {
               <div className="flex items-center gap-3">
                 <CategoryIcon icon={item.category.icon} color={item.category.color} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-content">{item.category.name}</p>
+                  <p className="truncate text-sm font-medium text-content">
+                    {categoryName(t, item.category.name)}
+                  </p>
                   <p className="truncate text-xs text-content-muted">
                     {t('reports.entries', { count: item.count })}
                     {' · '}

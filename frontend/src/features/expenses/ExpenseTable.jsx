@@ -5,6 +5,7 @@ import { CurrencyDisplay } from '@/components/common/CurrencyDisplay';
 import { Badge } from '@/components/ui/Badge';
 import { Table } from '@/components/ui/Table';
 import { ExpenseActions } from '@/features/expenses/ExpenseActions';
+import { categoryName } from '@/utils/categoryName';
 import { formatDate } from '@/utils/formatDate';
 
 const MAX_TAGS_SHOWN = 3;
@@ -40,7 +41,9 @@ export function ExpenseTable({
       cell: (expense) => (
         <div className="flex items-center gap-2">
           <CategoryIcon icon={expense.category.icon} color={expense.category.color} size="sm" />
-          <span className="truncate font-medium text-content">{expense.category.name}</span>
+          <span className="truncate font-medium text-content">
+            {categoryName(t, expense.category.name)}
+          </span>
         </div>
       ),
     },

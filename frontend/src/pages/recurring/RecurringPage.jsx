@@ -23,6 +23,7 @@ import {
 } from '@/features/recurring/useRecurring';
 import { toast } from '@/hooks/useToast';
 import { PATHS } from '@/routes/paths';
+import { categoryName } from '@/utils/categoryName';
 import { formatCurrency } from '@/utils/formatCurrency';
 
 function LoadError({ onRetry }) {
@@ -266,7 +267,7 @@ export default function RecurringPage() {
         description={
           toDelete
             ? t('recurring.deleteText', {
-                name: toDelete.note || toDelete.category.name,
+                name: toDelete.note || categoryName(t, toDelete.category.name),
                 amount: formatCurrency(toDelete.amount, toDelete.account.currency, i18n.language),
               })
             : ''

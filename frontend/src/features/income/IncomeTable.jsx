@@ -4,6 +4,7 @@ import { CurrencyDisplay } from '@/components/common/CurrencyDisplay';
 import { Badge } from '@/components/ui/Badge';
 import { Table } from '@/components/ui/Table';
 import { IncomeActions } from '@/features/income/IncomeActions';
+import { categoryName } from '@/utils/categoryName';
 import { formatDate } from '@/utils/formatDate';
 
 /**
@@ -28,7 +29,9 @@ export function IncomeTable({ incomes, loading, sortBy, sortOrder, onSort, onEdi
       cell: (income) => (
         <div className="flex items-center gap-2">
           <CategoryIcon icon={income.category.icon} color={income.category.color} size="sm" />
-          <span className="truncate font-medium text-content">{income.category.name}</span>
+          <span className="truncate font-medium text-content">
+            {categoryName(t, income.category.name)}
+          </span>
         </div>
       ),
     },
