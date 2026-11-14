@@ -12,6 +12,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { toast } from '@/hooks/useToast';
 import { changeLanguage } from '@/i18n';
 import { CURRENCIES, DEFAULT_LANGUAGE, LANGUAGES, THEMES } from '@/utils/constants';
+import { currencySymbolOverride } from '@/utils/formatCurrency';
 import { currencySchema } from '@/utils/validators';
 
 const schema = z.object({
@@ -24,7 +25,8 @@ const schema = z.object({
 function currencyLabel(code, language) {
   try {
     const name = new Intl.DisplayNames([language], { type: 'currency' }).of(code);
-    return name && name !== code ? `${code} · ${name}` : code;
+    const symbol = currencySymbolOverride(code, language) ?? code;
+    return name && name !== code ? `${symbol} · ${name}` : symbol;
   } catch {
     return code;
   }
