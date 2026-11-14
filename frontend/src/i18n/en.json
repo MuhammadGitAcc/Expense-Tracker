@@ -521,5 +521,37 @@
     "exportDone": "Downloaded {{name}}",
     "exportTooLarge": "This period has more than 5000 expenses, which is too many for one file. Choose a shorter period.",
     "exportRateLimit": "Too many exports. Wait a few minutes and try again."
+  },
+  "notifications": {
+    "title": "Notifications",
+    "subtitle": "Alerts about your budgets, recurring payments and weekly summaries.",
+    "unreadSummary": "Unread: {{n}}",
+    "markAllRead": "Mark all as read",
+    "allMarked": "All notifications are marked as read.",
+    "markRead": "Mark as read",
+    "markReadLabel": "Mark \"{{title}}\" as read",
+    "new": "New",
+    "bell": "Notifications",
+    "bellUnread": "Notifications, {{n}} unread",
+    "statusLabel": "Status",
+    "status": {
+      "all": "All",
+      "unread": "Unread",
+      "read": "Read"
+    },
+    "typeLabel": "Type",
+    "allTypes": "All types",
+    "types": {
+      "budget_warning": "Budget alert",
+      "budget_exceeded": "Budget exceeded",
+      "recurring_created": "Recurring payment",
+      "weekly_summary": "Weekly summary",
+      "system": "System"
+    },
+    "emptyTitle": "No notifications yet",
+    "emptyText": "Budget alerts, recurring payments and weekly summaries will show up here.",
+    "noResultsTitle": "No notifications match",
+    "noResultsText": "Try another status or type.",
+    "clearFilters": "Clear filters"
   }
 }
