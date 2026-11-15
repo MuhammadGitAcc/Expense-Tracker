@@ -17,16 +17,17 @@ export function filenameFromHeader(header, fallback) {
 /**
  * Downloads the expenses as a file through the API client (the Authorization header is sent,
  * a plain link could not do that). params: { format: 'csv' | 'xlsx' | 'pdf', from?, to? } (the
- * same filters as GET /expenses are possible). Answers { blob, filename }.
+ * same filters as GET /expenses are possible). lang: "en" or "ar", the language of the file.
+ * Answers { blob, filename }.
  *
  * A failed download answers a JSON error that axiosClient turns back into an object, so
  * error.response.status is 400 when the export has more than 5000 rows, 429 when too many
  * exports were asked for.
  */
-export const downloadExpensesExport = ({ format, from, to }) =>
+export const downloadExpensesExport = ({ format, from, to, lang }) =>
   axiosClient
     .get('/exports/expenses', {
-      params: { format, from, to },
+      params: { format, from, to, lang },
       responseType: 'blob',
       timeout: 2 * 60 * 1000, // a big PDF takes a while
     })

@@ -16,6 +16,7 @@ import { useBudgets, useDeleteBudget } from '@/features/budgets/useBudgets';
 import { useCategories } from '@/features/categories/useCategories';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/useToast';
+import { categoryName } from '@/utils/categoryName';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { formatMonthYear } from '@/utils/formatDate';
 
@@ -243,7 +244,9 @@ export default function BudgetsPage() {
         description={
           toDelete
             ? t('budgets.deleteText', {
-                name: toDelete.category ? toDelete.category.name : t('budgets.overall'),
+                name: toDelete.category
+                  ? categoryName(t, toDelete.category.name)
+                  : t('budgets.overall'),
                 amount: formatCurrency(toDelete.amount, currency, i18n.language),
                 month: monthLabel,
               })

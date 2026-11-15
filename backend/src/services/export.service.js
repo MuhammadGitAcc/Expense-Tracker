@@ -5,6 +5,8 @@ const PDFDocument = require('pdfkit');
 const ApiError = require('../utils/ApiError');
 const { today } = require('../utils/dateHelpers');
 const expenseRepository = require('../repositories/expense.repository');
+const { labelsFor, categoryLabel, paymentLabel, periodText } = require('../utils/exportLabels');
+const { visualRuns } = require('../utils/pdfBidi');
 
 // One export holds at most this many rows (everything is built in memory). It is an object so
 // a test can lower it.
@@ -39,37 +41,15 @@ function totalsByCurrency(expenses) {
     .map(([currency, { cents, count }]) => ({ currency, total: fromCents(cents), count }));
 }
 
-/** "bank_transfer" -> "Bank transfer" */
-const paymentLabel = (method) => {
-  const text = String(method).replace(/_/g, ' ');
-  return text.charAt(0).toUpperCase() + text.slice(1);
-};
-
 function buildFilename(query, extension) {
   const range =
     query.from || query.to ? `${query.from ?? 'start'}_to_${query.to ?? 'now'}` : today();
   return `expenses_${range}.${extension}`;
 }
 
-const periodText = (query) =>
-  query.from || query.to
-    ? `${query.from ?? 'the beginning'} to ${query.to ?? 'today'}`
-    : 'All dates';
-
 // ---------- CSV ----------
 
 const UTF8_BOM = String.fromCharCode(0xfeff);
-
-const CSV_HEADERS = [
-  'Date',
-  'Amount',
-  'Currency',
-  'Category',
-  'Account',
-  'Payment method',
-  'Tags',
-  'Note',
-];
 
 /**
  * One CSV cell. A text that starts with = + - @ (or a tab / carriage return) would be run as a
@@ -81,17 +61,19 @@ function csvCell(value) {
   return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-function buildCsv(expenses) {
-  const lines = [CSV_HEADERS.map(csvCell).join(',')];
+function buildCsv(expenses, lang) {
+  const L = labelsFor(lang);
+  const headers = [L.date, L.amount, L.currency, L.category, L.account, L.payment, L.tags, L.note];
+  const lines = [headers.map(csvCell).join(',')];
   for (const e of expenses) {
     lines.push(
       [
         e.date,
         e.amount,
         e.account.currency,
-        e.category.name,
+        categoryLabel(lang, e.category.name),
         e.account.name,
-        paymentLabel(e.paymentMethod),
+        paymentLabel(lang, e.paymentMethod),
         e.tags.join(', '),
         e.note,
       ]
@@ -105,21 +87,25 @@ function buildCsv(expenses) {
 
 // ---------- Excel ----------
 
-async function buildXlsx(expenses, totals) {
+async function buildXlsx(expenses, totals, lang) {
+  const L = labelsFor(lang);
   const workbook = new ExcelJS.Workbook();
   workbook.creator = APP_NAME;
   workbook.created = new Date();
 
-  const sheet = workbook.addWorksheet('Expenses', { views: [{ state: 'frozen', ySplit: 1 }] });
+  // In Arabic the sheet is read from right to left: the first column is on the right.
+  const sheet = workbook.addWorksheet(L.sheet, {
+    views: [{ state: 'frozen', ySplit: 1, rightToLeft: lang === 'ar' }],
+  });
   sheet.columns = [
-    { header: 'Date', key: 'date', width: 12, style: { numFmt: 'yyyy-mm-dd' } },
-    { header: 'Amount', key: 'amount', width: 14, style: { numFmt: '#,##0.00' } },
-    { header: 'Currency', key: 'currency', width: 10 },
-    { header: 'Category', key: 'category', width: 22 },
-    { header: 'Account', key: 'account', width: 22 },
-    { header: 'Payment method', key: 'payment', width: 16 },
-    { header: 'Tags', key: 'tags', width: 24 },
-    { header: 'Note', key: 'note', width: 50 },
+    { header: L.date, key: 'date', width: 12, style: { numFmt: 'yyyy-mm-dd' } },
+    { header: L.amount, key: 'amount', width: 14, style: { numFmt: '#,##0.00' } },
+    { header: L.currency, key: 'currency', width: 10 },
+    { header: L.category, key: 'category', width: 22 },
+    { header: L.account, key: 'account', width: 22 },
+    { header: L.payment, key: 'payment', width: 16 },
+    { header: L.tags, key: 'tags', width: 24 },
+    { header: L.note, key: 'note', width: 50 },
   ];
   sheet.getRow(1).font = { bold: true };
   sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E7FF' } };
@@ -129,9 +115,9 @@ async function buildXlsx(expenses, totals) {
       date: new Date(`${e.date}T00:00:00.000Z`),
       amount: Number(e.amount),
       currency: e.account.currency,
-      category: e.category.name,
+      category: categoryLabel(lang, e.category.name),
       account: e.account.name,
-      payment: paymentLabel(e.paymentMethod),
+      payment: paymentLabel(lang, e.paymentMethod),
       tags: e.tags.join(', '),
       note: e.note ?? '',
     });
@@ -145,7 +131,7 @@ async function buildXlsx(expenses, totals) {
     sheet.addRow({});
     for (const { currency, total, count } of totals) {
       const row = sheet.addRow({
-        category: `Total (${count} expenses)`,
+        category: L.total(count),
         amount: Number(total),
         currency,
       });
@@ -161,15 +147,21 @@ const PDF = {
   margin: 36,
   rowHeight: 18,
   footerSpace: 24,
+  // label: the word of the column title. ltr: numbers and dates keep their left-to-right order.
   columns: [
-    { key: 'date', title: 'Date', width: 64 },
-    { key: 'category', title: 'Category', width: 120 },
-    { key: 'account', title: 'Account', width: 110 },
-    { key: 'payment', title: 'Payment', width: 82 },
-    { key: 'amount', title: 'Amount', width: 92, align: 'right' },
-    { key: 'note', title: 'Note', width: 266 },
+    { key: 'date', label: 'date', width: 64, ltr: true },
+    { key: 'category', label: 'category', width: 120 },
+    { key: 'account', label: 'account', width: 110 },
+    { key: 'payment', label: 'paymentShort', width: 82 },
+    { key: 'amount', label: 'amount', width: 92, align: 'right', ltr: true },
+    { key: 'note', label: 'note', width: 266 },
   ],
 };
+
+// The Arabic PDF uses Noto Sans Arabic (Arabic and Latin letters, from the npm package).
+const ARABIC_FONT = 'NotoSansArabic';
+const ARABIC_FONT_BOLD = 'NotoSansArabic-Bold';
+const arabicFontFile = (file) => require.resolve(`@expo-google-fonts/noto-sans-arabic/${file}`);
 
 /**
  * The built-in PDF fonts only know Latin-1 letters. Anything else (Arabic, emoji ...) is shown
@@ -183,62 +175,150 @@ const pdfText = (value) =>
     .replace(NOT_LATIN1, '?')
     .trim();
 
-function buildPdf(expenses, totals, query) {
+// The Arabic font also has the Arabic letters, so only emoji and other scripts become "?".
+const NOT_ARABIC_FONT = new RegExp(
+  '[^\\x20-\\x7E\\u00A0-\\u00FF\\u0600-\\u06FF\\u0750-\\u077F\\u2010-\\u2027\\u200E\\u200F]',
+  'g',
+);
+const arabicPdfText = (value) =>
+  String(value ?? '')
+    .replace(/\s+/g, ' ')
+    .replace(NOT_ARABIC_FONT, '?')
+    .trim();
+
+/**
+ * One line of right-to-left text: cut with "…" when it is wider than the box, then drawn run by
+ * run in reading order (see visualRuns). align: "right" (default) or "left". `cache` remembers
+ * the layout of texts that come back often (category and account names): measuring is the slow part.
+ */
+function drawRtlText(doc, text, x, y, width, align = 'right', cache = new Map()) {
+  // "rtla" makes the font lay the Arabic letters out right to left, with the spaces between words.
+  const layout = (value) => {
+    let found = cache.get(value);
+    if (!found) {
+      const runs = visualRuns(value).map((run) => ({
+        text: run.text,
+        options: run.level % 2 === 1 ? { features: ['rtla'] } : {},
+      }));
+      for (const run of runs) run.width = doc.widthOfString(run.text, run.options);
+      found = { runs, width: runs.reduce((sum, run) => sum + run.width, 0) };
+      cache.set(value, found);
+    }
+    return found;
+  };
+
+  let line = text;
+  let drawn = layout(line);
+  if (drawn.width > width) {
+    // The longest start of the text that fits together with "…" (a guess from the width, then a search).
+    let low = 0;
+    let high = Math.min(line.length, Math.ceil((line.length * width) / drawn.width) + 2);
+    while (low < high) {
+      const middle = Math.ceil((low + high) / 2);
+      if (layout(`${line.slice(0, middle).trimEnd()}…`).width <= width) low = middle;
+      else high = middle - 1;
+    }
+    line = `${line.slice(0, low).trimEnd()}…`;
+    drawn = layout(line);
+  }
+
+  let cursor = align === 'left' ? x : x + width - drawn.width;
+  for (const run of drawn.runs) {
+    doc.text(run.text, cursor, y, { lineBreak: false, ...run.options });
+    cursor += run.width;
+  }
+}
+
+function buildPdf(expenses, totals, query, lang) {
   return new Promise((resolve, reject) => {
+    const L = labelsFor(lang);
+    const rtl = lang === 'ar';
+    const regular = rtl ? ARABIC_FONT : 'Helvetica';
+    const bold = rtl ? ARABIC_FONT_BOLD : 'Helvetica-Bold';
+    // In Arabic the table is read from right to left: the first column is on the right.
+    const columns = rtl ? [...PDF.columns].reverse() : PDF.columns;
+
     const doc = new PDFDocument({
       size: 'A4',
       layout: 'landscape',
       margin: PDF.margin,
       bufferPages: true,
-      info: { Title: 'Expenses', Author: APP_NAME },
+      info: { Title: L.title, Author: APP_NAME },
     });
+    if (rtl) {
+      doc.registerFont(ARABIC_FONT, arabicFontFile('400Regular/NotoSansArabic_400Regular.ttf'));
+      doc.registerFont(ARABIC_FONT_BOLD, arabicFontFile('700Bold/NotoSansArabic_700Bold.ttf'));
+    }
     const chunks = [];
     doc.on('data', (chunk) => chunks.push(chunk));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
+    // The measured layout of each text, kept apart for every font and size.
+    const layouts = new Map();
+    const layoutCache = (font, size) => {
+      const key = `${font}|${size}`;
+      if (!layouts.has(key)) layouts.set(key, new Map());
+      return layouts.get(key);
+    };
+
     const left = PDF.margin;
-    const tableWidth = PDF.columns.reduce((sum, c) => sum + c.width, 0);
+    const tableWidth = columns.reduce((sum, c) => sum + c.width, 0);
     const bottomLimit = () => doc.page.height - PDF.margin - PDF.footerSpace;
 
-    const drawRow = (y, cells, { bold = false, fill = null } = {}) => {
+    // A text outside the table: title, summary line, empty message, page numbers.
+    const put = (value, { font, size, color, x, y, width = tableWidth, align = 'left' }) => {
+      doc.font(font).fontSize(size).fillColor(color);
+      if (rtl) {
+        const side = align === 'left' ? 'right' : 'left';
+        drawRtlText(doc, arabicPdfText(value), x, y, width, side, layoutCache(font, size));
+      } else {
+        doc.text(value, x, y, align === 'left' ? undefined : { width, align, lineBreak: false });
+      }
+    };
+
+    const drawRow = (y, cells, { isBold = false, fill = null } = {}) => {
       if (fill) doc.rect(left, y - 3, tableWidth, PDF.rowHeight).fill(fill);
       doc
         .fillColor('#111827')
-        .font(bold ? 'Helvetica-Bold' : 'Helvetica')
+        .font(isBold ? bold : regular)
         .fontSize(9);
       let x = left;
-      for (const column of PDF.columns) {
-        doc.text(pdfText(cells[column.key]), x + 3, y, {
-          width: column.width - 6,
-          height: PDF.rowHeight - 6,
-          align: column.align || 'left',
-          lineBreak: false,
-          ellipsis: true,
-        });
+      for (const column of columns) {
+        const boxX = x + 3;
+        const boxWidth = column.width - 6;
+        if (rtl && !column.ltr) {
+          const cache = layoutCache(isBold, 9);
+          drawRtlText(doc, arabicPdfText(cells[column.key]), boxX, y, boxWidth, 'right', cache);
+        } else {
+          doc.text(rtl ? arabicPdfText(cells[column.key]) : pdfText(cells[column.key]), boxX, y, {
+            width: boxWidth,
+            height: PDF.rowHeight - 6,
+            align: rtl ? 'right' : column.align || 'left',
+            lineBreak: false,
+            ellipsis: true,
+          });
+        }
         x += column.width;
       }
     };
-    const headerCells = Object.fromEntries(PDF.columns.map((c) => [c.key, c.title]));
+    const headerCells = Object.fromEntries(PDF.columns.map((c) => [c.key, L[c.label]]));
 
-    doc.font('Helvetica-Bold').fontSize(18).fillColor('#111827').text('Expenses', left, left);
-    doc
-      .font('Helvetica')
-      .fontSize(10)
-      .fillColor('#6b7280')
-      .text(
-        `${periodText(query)}  |  ${expenses.length} expenses  |  Generated ${today()}`,
-        left,
-        left + 26,
-      );
+    put(L.title, { font: bold, size: 18, color: '#111827', x: left, y: left });
+    put(L.summary(periodText(lang, query), expenses.length, today()), {
+      font: regular,
+      size: 10,
+      color: '#6b7280',
+      x: left,
+      y: left + 26,
+    });
 
     let y = left + 52;
-    drawRow(y, headerCells, { bold: true, fill: '#e0e7ff' });
+    drawRow(y, headerCells, { isBold: true, fill: '#e0e7ff' });
     y += PDF.rowHeight;
 
     if (expenses.length === 0) {
-      doc.font('Helvetica').fontSize(10).fillColor('#6b7280');
-      doc.text('No expenses match these filters.', left + 3, y + 4);
+      put(L.empty, { font: regular, size: 10, color: '#6b7280', x: left + 3, y: y + 4 });
       y += PDF.rowHeight * 2;
     }
 
@@ -246,16 +326,16 @@ function buildPdf(expenses, totals, query) {
       if (y + PDF.rowHeight > bottomLimit()) {
         doc.addPage();
         y = PDF.margin;
-        drawRow(y, headerCells, { bold: true, fill: '#e0e7ff' });
+        drawRow(y, headerCells, { isBold: true, fill: '#e0e7ff' });
         y += PDF.rowHeight;
       }
       drawRow(
         y,
         {
           date: e.date,
-          category: e.category.name,
+          category: categoryLabel(lang, e.category.name),
           account: e.account.name,
-          payment: paymentLabel(e.paymentMethod),
+          payment: paymentLabel(lang, e.paymentMethod),
           amount: `${e.amount} ${e.account.currency}`,
           note: e.note,
         },
@@ -272,11 +352,7 @@ function buildPdf(expenses, totals, query) {
       }
       y += 6;
       for (const { currency, total, count } of totals) {
-        drawRow(
-          y,
-          { category: `Total (${count} expenses)`, amount: `${total} ${currency}` },
-          { bold: true },
-        );
+        drawRow(y, { category: L.total(count), amount: `${total} ${currency}` }, { isBold: true });
         y += PDF.rowHeight;
       }
     }
@@ -287,15 +363,14 @@ function buildPdf(expenses, totals, query) {
       doc.switchToPage(i);
       const savedBottom = doc.page.margins.bottom;
       doc.page.margins.bottom = 0;
-      doc
-        .font('Helvetica')
-        .fontSize(8)
-        .fillColor('#6b7280')
-        .text(`Page ${i + 1} of ${pages}`, left, doc.page.height - PDF.margin, {
-          width: tableWidth,
-          align: 'right',
-          lineBreak: false,
-        });
+      put(L.page(i + 1, pages), {
+        font: regular,
+        size: 8,
+        color: '#6b7280',
+        x: left,
+        y: doc.page.height - PDF.margin,
+        align: 'right',
+      });
       doc.page.margins.bottom = savedBottom;
     }
     doc.end();
@@ -318,7 +393,7 @@ const FORMATS = {
  * GET /expenses). Resolves { buffer, contentType, filename }.
  */
 async function exportExpenses(userId, query) {
-  const { format, sortBy, sortOrder, ...filters } = query;
+  const { format, lang, sortBy, sortOrder, ...filters } = query;
   const target = FORMATS[format];
   if (!target) throw ApiError.badRequest('Choose a format: csv, xlsx or pdf');
 
@@ -339,9 +414,9 @@ async function exportExpenses(userId, query) {
   const totals = totalsByCurrency(expenses);
 
   let buffer;
-  if (format === 'csv') buffer = buildCsv(expenses);
-  else if (format === 'xlsx') buffer = await buildXlsx(expenses, totals);
-  else buffer = await buildPdf(expenses, totals, query);
+  if (format === 'csv') buffer = buildCsv(expenses, lang);
+  else if (format === 'xlsx') buffer = await buildXlsx(expenses, totals, lang);
+  else buffer = await buildPdf(expenses, totals, query, lang);
 
   return {
     buffer,

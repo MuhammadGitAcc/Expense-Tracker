@@ -1,0 +1,17 @@
+User-agent: *
+Disallow: /dashboard
+Disallow: /expenses
+Disallow: /income
+Disallow: /accounts
+Disallow: /categories
+Disallow: /budgets
+Disallow: /recurring
+Disallow: /reports
+Disallow: /notifications
+Disallow: /settings
+Disallow: /verify-email
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /error
+Disallow: /api/
+Disallow: /uploads/

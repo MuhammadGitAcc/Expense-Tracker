@@ -132,6 +132,22 @@
     "invalidLinkText": "The reset link is missing or incomplete.",
     "requestNewLink": "Request a new link"
   },
+  "defaultCategories": {
+    "Food": "Food",
+    "Transport": "Transport",
+    "Rent": "Rent",
+    "Bills": "Bills",
+    "Shopping": "Shopping",
+    "Health": "Health",
+    "Entertainment": "Entertainment",
+    "Education": "Education",
+    "Travel": "Travel",
+    "Gifts": "Gifts",
+    "Other": "Other",
+    "Salary": "Salary",
+    "Freelance": "Freelance",
+    "Investments": "Investments"
+  },
   "categories": {
     "title": "Categories",
     "subtitle": "Organize your income and expenses.",

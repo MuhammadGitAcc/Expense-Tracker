@@ -132,6 +132,22 @@
     "invalidLinkText": "رابط إعادة التعيين مفقود أو غير مكتمل.",
     "requestNewLink": "طلب رابط جديد"
   },
+  "defaultCategories": {
+    "Food": "الطعام",
+    "Transport": "المواصلات",
+    "Rent": "الإيجار",
+    "Bills": "الفواتير",
+    "Shopping": "التسوق",
+    "Health": "الصحة",
+    "Entertainment": "الترفيه",
+    "Education": "التعليم",
+    "Travel": "السفر",
+    "Gifts": "الهدايا",
+    "Other": "أخرى",
+    "Salary": "الراتب",
+    "Freelance": "العمل الحر",
+    "Investments": "الاستثمارات"
+  },
   "categories": {
     "title": "الفئات",
     "subtitle": "نظّم دخلك ومصروفاتك.",

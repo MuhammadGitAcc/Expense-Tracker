@@ -3,15 +3,16 @@ import { CategoryIcon } from '@/components/common/CategoryIcon';
 import { CurrencyDisplay } from '@/components/common/CurrencyDisplay';
 import { Card } from '@/components/ui/Card';
 import { IncomeActions } from '@/features/income/IncomeActions';
+import { categoryName } from '@/utils/categoryName';
 import { formatDate } from '@/utils/formatDate';
 
 /** One income record on a phone (an <li>: put it inside a <ul>). Tapping the card opens the editor. */
 export function IncomeCard({ income, onEdit, onDelete }) {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   // The category is the title when there is no source, so it is not repeated underneath.
   const details = [
-    income.source ? income.category.name : null,
+    income.source ? categoryName(t, income.category.name) : null,
     formatDate(income.date, i18n.language),
     income.account.name,
   ]
@@ -28,7 +29,7 @@ export function IncomeCard({ income, onEdit, onDelete }) {
         <CategoryIcon icon={income.category.icon} color={income.category.color} />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium text-content">
-            {income.source || income.category.name}
+            {income.source || categoryName(t, income.category.name)}
           </span>
           <span className="block truncate text-xs text-content-muted">{details}</span>
         </span>

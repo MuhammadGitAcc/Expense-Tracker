@@ -1,6 +1,7 @@
 import { Paperclip, Pencil, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Dropdown } from '@/components/ui/Dropdown';
+import { categoryName } from '@/utils/categoryName';
 
 /** The "three dots" menu of one expense (table row and phone card): Edit, View receipt, Delete. */
 export function ExpenseActions({ expense, onEdit, onDelete, onViewReceipt }) {
@@ -35,7 +36,9 @@ export function ExpenseActions({ expense, onEdit, onDelete, onViewReceipt }) {
 
   return (
     <Dropdown
-      label={t('expenses.actionsFor', { name: expense.note || expense.category.name })}
+      label={t('expenses.actionsFor', {
+        name: expense.note || categoryName(t, expense.category.name),
+      })}
       items={items}
     />
   );

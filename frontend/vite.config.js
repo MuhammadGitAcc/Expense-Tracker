@@ -9,6 +9,20 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (id.includes('/react-router') || id.includes('/@remix-run/')) return 'vendor-router';
+          if (id.includes('/@tanstack/') || id.includes('/axios/')) return 'vendor-data';
+          if (id.includes('/i18next') || id.includes('/react-i18next/')) return 'vendor-i18n';
+          if (id.includes('/react-dom/') || id.includes('/scheduler/')) return 'vendor-react';
+          return undefined;
+        },
+      },
+    },
+  },
   server: {
     port: 5173,
     proxy: {

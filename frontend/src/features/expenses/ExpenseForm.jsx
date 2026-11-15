@@ -17,6 +17,7 @@ import {
   useUploadReceipt,
 } from '@/features/expenses/useExpenses';
 import { toast } from '@/hooks/useToast';
+import { categoryName } from '@/utils/categoryName';
 import { PAYMENT_METHODS } from '@/utils/constants';
 import { todayISO } from '@/utils/formatDate';
 import { isoDateSchema, positiveMoneySchema, textSchema } from '@/utils/validators';
@@ -215,7 +216,10 @@ export function ExpenseForm({
           label={t('expenses.category')}
           required
           placeholder={t('expenses.chooseCategory')}
-          options={categories.map((category) => ({ value: category.id, label: category.name }))}
+          options={categories.map((category) => ({
+            value: category.id,
+            label: categoryName(t, category.name),
+          }))}
           error={errors.categoryId?.message}
           {...register('categoryId')}
         />

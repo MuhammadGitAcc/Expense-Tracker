@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/Card';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { categoryName } from '@/utils/categoryName';
 
 function CategoryRow({ category, onEdit, onDelete }) {
   const { t } = useTranslation();
@@ -15,7 +16,7 @@ function CategoryRow({ category, onEdit, onDelete }) {
     <li className="flex items-center gap-3 px-4 py-3">
       <CategoryIcon icon={category.icon} color={category.color} />
       <span className="min-w-0 flex-1 truncate text-sm font-medium text-content">
-        {category.name}
+        {categoryName(t, category.name)}
       </span>
 
       {category.isDefault ? (

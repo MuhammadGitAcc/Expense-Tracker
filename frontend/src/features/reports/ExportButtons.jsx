@@ -20,7 +20,7 @@ const FORMATS = [
  * The export holds the expenses of every account and currency (the API never converts).
  */
 export function ExportButtons({ from, to, periodLabel }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const exportFile = useMutation({ mutationFn: downloadExpensesExport });
   const busyFormat = exportFile.isPending ? exportFile.variables?.format : null;
 
@@ -35,7 +35,7 @@ export function ExportButtons({ from, to, periodLabel }) {
 
   const run = (format) => {
     exportFile.mutate(
-      { format, from, to },
+      { format, from, to, lang: i18n.language === 'ar' ? 'ar' : 'en' },
       {
         onSuccess: ({ blob, filename }) => {
           saveBlob(blob, filename);

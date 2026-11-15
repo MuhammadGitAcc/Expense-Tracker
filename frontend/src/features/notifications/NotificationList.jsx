@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { AlertOctagon, AlertTriangle, CalendarDays, Check, Info, Repeat } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/Badge';
@@ -20,6 +21,15 @@ function NotificationItem({ notification, onMarkRead, busy }) {
   const { t, i18n } = useTranslation();
   const style = TYPE_STYLES[notification.type] ?? TYPE_STYLES.system;
   const Icon = style.icon;
+  const textRef = useRef(null);
+  const wasRead = useRef(notification.isRead);
+
+  useEffect(() => {
+    if (!wasRead.current && notification.isRead && document.activeElement === document.body) {
+      textRef.current?.focus();
+    }
+    wasRead.current = notification.isRead;
+  }, [notification.isRead]);
 
   return (
     <Card
@@ -40,7 +50,7 @@ function NotificationItem({ notification, onMarkRead, busy }) {
         <Icon className="h-5 w-5" />
       </span>
 
-      <div className="min-w-0 flex-1">
+      <div ref={textRef} tabIndex={-1} className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <h3
             className={cn(

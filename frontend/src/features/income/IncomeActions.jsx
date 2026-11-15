@@ -1,6 +1,7 @@
 import { Pencil, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Dropdown } from '@/components/ui/Dropdown';
+import { categoryName } from '@/utils/categoryName';
 
 /** The "three dots" menu of one income record (table row and phone card): Edit, Delete. */
 export function IncomeActions({ income, onEdit, onDelete }) {
@@ -8,7 +9,9 @@ export function IncomeActions({ income, onEdit, onDelete }) {
 
   return (
     <Dropdown
-      label={t('income.actionsFor', { name: income.source || income.category.name })}
+      label={t('income.actionsFor', {
+        name: income.source || categoryName(t, income.category.name),
+      })}
       items={[
         {
           key: 'edit',

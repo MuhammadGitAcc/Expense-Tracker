@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { BudgetProgress } from '@/features/budgets/BudgetProgress';
 import { useBudgets } from '@/features/budgets/useBudgets';
 import { PATHS } from '@/routes/paths';
+import { categoryName } from '@/utils/categoryName';
 import { formatMonthYear } from '@/utils/formatDate';
 
 const SHOWN = 4; // the budgets closest to their limit
@@ -92,7 +93,9 @@ export function BudgetOverview({ currency }) {
       />
       <ul className="space-y-4">
         {top.map((budget) => {
-          const name = budget.category ? budget.category.name : t('budgets.overall');
+          const name = budget.category
+            ? categoryName(t, budget.category.name)
+            : t('budgets.overall');
           return (
             <li key={budget.id}>
               <p className="mb-1.5 flex flex-wrap items-baseline justify-between gap-x-2 text-sm">

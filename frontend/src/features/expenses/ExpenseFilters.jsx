@@ -9,6 +9,7 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { useDebounce } from '@/hooks/useDebounce';
+import { categoryName } from '@/utils/categoryName';
 import { PAYMENT_METHODS } from '@/utils/constants';
 
 export const EMPTY_FILTERS = {
@@ -179,7 +180,10 @@ export function ExpenseFilters({
               onChange={(event) => onChange({ categoryId: event.target.value })}
               options={[
                 { value: '', label: t('expenses.allCategories') },
-                ...categories.map((category) => ({ value: category.id, label: category.name })),
+                ...categories.map((category) => ({
+                  value: category.id,
+                  label: categoryName(t, category.name),
+                })),
               ]}
             />
             <Select

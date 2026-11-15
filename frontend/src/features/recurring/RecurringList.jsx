@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { categoryName } from '@/utils/categoryName';
 import { formatDate } from '@/utils/formatDate';
 
 /** The cards while the first load runs. */
@@ -28,7 +29,7 @@ export function RecurringListSkeleton() {
 
 function RecurringCard({ item, accountArchived, busy, onEdit, onToggle, onDelete }) {
   const { t, i18n } = useTranslation();
-  const name = item.note || item.category.name;
+  const name = item.note || categoryName(t, item.category.name);
   const isExpense = item.type === 'expense';
 
   return (
@@ -36,7 +37,9 @@ function RecurringCard({ item, accountArchived, busy, onEdit, onToggle, onDelete
       <div className="flex items-start gap-3">
         <CategoryIcon icon={item.category.icon} color={item.category.color} />
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-sm font-semibold text-content">{item.category.name}</h3>
+          <h3 className="truncate text-sm font-semibold text-content">
+            {categoryName(t, item.category.name)}
+          </h3>
           <p className="truncate text-xs text-content-muted">
             {item.note ? `${item.note} · ` : ''}
             {item.account.name}

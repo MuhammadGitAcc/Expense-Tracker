@@ -57,6 +57,7 @@ export const MEDIA = {
 export const STORAGE_KEYS = {
   theme: 'et.theme',
   language: 'et.language',
+  hasSession: 'et.session',
 };
 
 export const TOAST = { maxVisible: 5, durationMs: 4000, errorDurationMs: 6000 };

@@ -8,6 +8,7 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { PATHS } from '@/routes/paths';
+import { categoryName } from '@/utils/categoryName';
 import { formatDate } from '@/utils/formatDate';
 
 /** The card while the first load runs. */
@@ -63,10 +64,11 @@ export function RecentTransactions({ transactions, currency }) {
       <ul className="divide-y divide-line">
         {transactions.map((item) => {
           const isExpense = item.type === 'expense';
-          const title = item.note || item.source || item.category.name;
+          const category = categoryName(t, item.category.name);
+          const title = item.note || item.source || category;
           // The category is the title when there is no note or source, so it is not repeated.
           const details = [
-            title === item.category.name ? null : item.category.name,
+            title === category ? null : category,
             formatDate(item.date, i18n.language),
             item.account.name,
           ]

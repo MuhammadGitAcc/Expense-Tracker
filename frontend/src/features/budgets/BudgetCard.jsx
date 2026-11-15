@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { BudgetProgress } from '@/features/budgets/BudgetProgress';
+import { categoryName } from '@/utils/categoryName';
 
 const STATUS_BADGES = { ok: 'success', warning: 'warning', exceeded: 'danger' };
 
@@ -15,7 +16,7 @@ const STATUS_BADGES = { ok: 'success', warning: 'warning', exceeded: 'danger' };
  */
 export function BudgetCard({ budget, currency, onEdit, onDelete }) {
   const { t } = useTranslation();
-  const name = budget.category ? budget.category.name : t('budgets.overall');
+  const name = budget.category ? categoryName(t, budget.category.name) : t('budgets.overall');
   const exceeded = budget.status === 'exceeded';
   // "remaining" is negative when over the limit: show it without the sign, with "Over by".
   const remaining = String(budget.remaining).replace(/^-/, '');

@@ -8,6 +8,7 @@ import { Input, Textarea } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { useCreateIncome, useUpdateIncome } from '@/features/income/useIncome';
 import { toast } from '@/hooks/useToast';
+import { categoryName } from '@/utils/categoryName';
 import { todayISO } from '@/utils/formatDate';
 import { isoDateSchema, positiveMoneySchema, textSchema } from '@/utils/validators';
 
@@ -152,7 +153,10 @@ export function IncomeForm({ income, accounts, categories, onSaved, onPendingCha
           label={t('income.category')}
           required
           placeholder={t('income.chooseCategory')}
-          options={categories.map((category) => ({ value: category.id, label: category.name }))}
+          options={categories.map((category) => ({
+            value: category.id,
+            label: categoryName(t, category.name),
+          }))}
           error={errors.categoryId?.message}
           {...register('categoryId')}
         />

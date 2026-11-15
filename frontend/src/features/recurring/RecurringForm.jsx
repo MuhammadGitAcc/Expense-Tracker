@@ -9,6 +9,7 @@ import { Input, Textarea } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { useCreateRecurring, useUpdateRecurring } from '@/features/recurring/useRecurring';
 import { toast } from '@/hooks/useToast';
+import { categoryName } from '@/utils/categoryName';
 import { CATEGORY_TYPES, FREQUENCIES } from '@/utils/constants';
 import { formatDate, isValidISODate, todayISO } from '@/utils/formatDate';
 import { positiveMoneySchema, textSchema } from '@/utils/validators';
@@ -233,7 +234,10 @@ export function RecurringForm({ recurring, accounts, categories, onSaved, onPend
         label={t('recurring.category')}
         required
         placeholder={t('recurring.chooseCategory')}
-        options={categoryOptions.map((category) => ({ value: category.id, label: category.name }))}
+        options={categoryOptions.map((category) => ({
+          value: category.id,
+          label: categoryName(t, category.name),
+        }))}
         error={errors.categoryId?.message}
         {...register('categoryId')}
       />

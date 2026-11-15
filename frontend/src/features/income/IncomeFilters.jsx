@@ -9,6 +9,7 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { useDebounce } from '@/hooks/useDebounce';
+import { categoryName } from '@/utils/categoryName';
 
 export const EMPTY_FILTERS = {
   search: '',
@@ -163,7 +164,10 @@ export function IncomeFilters({
               onChange={(event) => onChange({ categoryId: event.target.value })}
               options={[
                 { value: '', label: t('income.allCategories') },
-                ...categories.map((category) => ({ value: category.id, label: category.name })),
+                ...categories.map((category) => ({
+                  value: category.id,
+                  label: categoryName(t, category.name),
+                })),
               ]}
             />
             <Select

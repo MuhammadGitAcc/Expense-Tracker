@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { useCreateBudget, useUpdateBudget } from '@/features/budgets/useBudgets';
 import { toast } from '@/hooks/useToast';
+import { categoryName } from '@/utils/categoryName';
 import { formatMonthYear } from '@/utils/formatDate';
 import { positiveMoneySchema } from '@/utils/validators';
 
@@ -57,7 +58,7 @@ export function BudgetForm({
     ...(hasOverall ? [] : [{ value: OVERALL, label: t('budgets.overallOption') }]),
     ...categories
       .filter((category) => !takenCategoryIds.includes(category.id))
-      .map((category) => ({ value: category.id, label: category.name })),
+      .map((category) => ({ value: category.id, label: categoryName(t, category.name) })),
   ];
 
   const {
@@ -125,7 +126,7 @@ export function BudgetForm({
 
       {isEdit ? (
         <p className="text-sm font-medium text-content">
-          {budget.category ? budget.category.name : t('budgets.overall')}
+          {budget.category ? categoryName(t, budget.category.name) : t('budgets.overall')}
         </p>
       ) : (
         <Select
