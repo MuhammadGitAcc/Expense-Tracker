@@ -1683,11 +1683,18 @@ paths:
 
         CSV: UTF-8 with a byte order mark, CRLF lines; cells starting with `= + - @` get a leading `'`
         (CSV injection guard). Excel: typed cells and one total per currency. PDF: A4 landscape, only
-        Latin-1 characters (others show as `?`). Totals are per currency, never converted.
+        Latin-1 characters in English (others show as `?`); in Arabic it uses an Arabic font and runs
+        from right to left. Totals are per currency, never converted.
+
+        `lang=ar` writes the column titles, the payment methods and the default category names in
+        Arabic (Excel opens the sheet from right to left). `en` is the default.
       parameters:
         - in: query
           name: format
           schema: { type: string, enum: [csv, xlsx, pdf], default: csv }
+        - in: query
+          name: lang
+          schema: { type: string, enum: [en, ar], default: en }
         - $ref: '#/components/parameters/Search'
         - $ref: '#/components/parameters/From'
         - $ref: '#/components/parameters/To'

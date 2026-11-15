@@ -21,7 +21,9 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@expo-google-fonts/noto-sans-arabic": "^0.4.3",
     "bcrypt": "^6.0.0",
+    "bidi-js": "^1.1.0",
     "compression": "^1.8.2",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",

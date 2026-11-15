@@ -10,10 +10,11 @@ const uuid = z.uuid('Invalid id');
 const tag = z.string().trim().toLowerCase().min(1).max(30);
 
 // The same filters as GET /expenses (without page and limit: an export has every match).
-// ?format=csv|xlsx|pdf (csv when left out).
+// ?format=csv|xlsx|pdf (csv when left out). ?lang=en|ar is the language of the file (en when left out).
 const exportExpensesQuerySchema = z
   .object({
     format: z.enum(EXPORT_FORMATS).default('csv'),
+    lang: z.enum(['en', 'ar']).default('en'),
     search: z.string().trim().min(1).max(100).optional(),
     from: isoDate.optional(),
     to: isoDate.optional(),
