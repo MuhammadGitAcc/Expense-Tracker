@@ -20,6 +20,45 @@ services:
       timeout: 5s
       retries: 5
 
+  backend:
+    build:
+      context: ./backend
+    container_name: expense_tracker_api
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      NODE_ENV: development
+      PORT: "5000"
+      DATABASE_URL: postgresql://expense_user:dev_password_change_me@postgres:5432/expense_tracker
+      CORS_ORIGIN: http://localhost:8080
+      FRONTEND_URL: http://localhost:8080
+      COOKIE_SECURE: "false"
+      UPLOAD_DIR: uploads
+      LOG_LEVEL: info
+    command:
+      [
+        "sh",
+        "-c",
+        "node database/migrate.js && node database/seed.js && node src/server.js",
+      ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - backend_uploads:/app/uploads
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: expense_tracker_web
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
   # Optional database UI. Start it with:  docker compose --profile tools up -d
   pgadmin:
     image: dpage/pgadmin4:latest
@@ -40,3 +79,4 @@ services:
 volumes:
   postgres_data:
   pgadmin_data:
+  backend_uploads:
