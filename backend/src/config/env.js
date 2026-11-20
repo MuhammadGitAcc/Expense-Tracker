@@ -20,6 +20,8 @@ const schema = z.object({
 
   DATABASE_URL: z.string().min(1, 'is required'),
   DB_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
+  DB_SSL: bool.default(false),
+  DB_SSL_REJECT_UNAUTHORIZED: bool.default(true),
 
   JWT_ACCESS_SECRET: secret,
   JWT_REFRESH_SECRET: secret,
@@ -94,7 +96,12 @@ module.exports = Object.freeze({
   isTest: e.NODE_ENV === 'test',
   port: e.PORT,
   apiPrefix: e.API_PREFIX.replace(/\/$/, ''),
-  db: { url: e.DATABASE_URL, poolMax: e.DB_POOL_MAX },
+  db: {
+    url: e.DATABASE_URL,
+    poolMax: e.DB_POOL_MAX,
+    ssl: e.DB_SSL,
+    sslRejectUnauthorized: e.DB_SSL_REJECT_UNAUTHORIZED,
+  },
   jwt: {
     accessSecret: e.JWT_ACCESS_SECRET,
     refreshSecret: e.JWT_REFRESH_SECRET,

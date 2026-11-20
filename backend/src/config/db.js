@@ -11,6 +11,7 @@ const logger = require('./logger');
 const pool = new Pool({
   connectionString: env.db.url,
   max: env.db.poolMax,
+  ssl: env.db.ssl ? { rejectUnauthorized: env.db.sslRejectUnauthorized } : false,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
 });

@@ -44,7 +44,13 @@ async function main() {
     throw new Error('Refusing to seed demo data when NODE_ENV=production.');
   }
 
-  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  const client = new Client({
+    connectionString: process.env.DATABASE_URL,
+    ssl:
+      process.env.DB_SSL === 'true'
+        ? { rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false' }
+        : false,
+  });
   await client.connect();
   try {
     await runSeed(client, '001_default_categories.sql', readSeed('001_default_categories.sql'));
